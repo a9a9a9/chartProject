@@ -1,0 +1,23 @@
+{
+  "name": "jquery-custom-gantt",
+  "version": "0.1.0",
+  "description": "A simple jQuery Gantt chart plugin with large, medium, and small category grouping.",
+  "main": "dist/jquery.custom-gantt.js",
+  "style": "dist/jquery.custom-gantt.css",
+  "scripts": {
+    "demo": "npx serve .",
+    "lint": "echo \"No lint configured yet\""
+  },
+  "keywords": [
+    "jquery",
+    "gantt",
+    "chart",
+    "schedule",
+    "timeline"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "jquery": ">=3.6.0"
+  }
+}

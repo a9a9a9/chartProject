@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>jQuery Custom Gantt Demo</title>
+    <link rel="stylesheet" href="../dist/jquery.custom-gantt.css?v=20260524-28" />
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+      }
+
+      body {
+        background: #f1f5f9;
+        color: #1f2937;
+        font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      .demo-shell {
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+        width: calc(100% - 100px);
+        height: 100%;
+        margin: 0 auto;
+        padding: 24px 0;
+      }
+
+      .demo-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 20px;
+        flex: 0 0 auto;
+        margin-bottom: 14px;
+      }
+
+      .demo-title {
+        margin: 0 0 6px;
+        font-size: 26px;
+        line-height: 1.25;
+      }
+
+      .demo-desc {
+        margin: 0;
+        color: #64748b;
+        line-height: 1.6;
+      }
+
+      .demo-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .demo-toggle {
+        display: inline-flex;
+        overflow: hidden;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #ffffff;
+      }
+
+      .demo-button {
+        min-height: 36px;
+        padding: 0 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #334155;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      .demo-toggle .demo-button {
+        border: 0;
+        border-radius: 0;
+      }
+
+      .demo-toggle .demo-button + .demo-button {
+        border-left: 1px solid #e2e8f0;
+      }
+
+      .demo-button.is-active {
+        background: #1f2937;
+        color: #ffffff;
+      }
+
+      .demo-button:hover {
+        background: #f8fafc;
+      }
+
+      .demo-button.is-active:hover {
+        background: #1f2937;
+      }
+
+      .demo-icon-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border: 1px solid #cbd5e1;
+        border-radius: 6px;
+        background: #ffffff;
+        color: #334155;
+        cursor: pointer;
+      }
+
+      .demo-icon-button:hover {
+        background: #f8fafc;
+      }
+
+      .demo-icon-button::before {
+        content: "−";
+        font-size: 18px;
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .demo-icon-button.is-collapsed::before {
+        content: "+";
+      }
+
+      #gantt {
+        flex: 1 1 auto;
+        min-height: 0;
+      }
+
+      @media (max-width: 720px) {
+        .demo-header {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .demo-shell {
+          width: calc(100% - 24px);
+          padding: 12px 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="demo-shell">
+      <header class="demo-header">
+        <div>
+          <h1 class="demo-title">jQuery Custom Gantt</h1>
+          <p class="demo-desc">6개월 회사 프로젝트 일정을 대/중/소 분류 Gantt chart로 표현합니다.</p>
+        </div>
+        <div class="demo-actions">
+          <div class="demo-toggle" aria-label="날짜 보기 단위">
+            <button class="demo-button is-active" type="button" data-view-mode="day">일별</button>
+            <button class="demo-button" type="button" data-view-mode="week">주별</button>
+            <button class="demo-button" type="button" data-view-mode="month">월별</button>
+          </div>
+          <div class="demo-toggle" aria-label="간격">
+            <button class="demo-button is-active" type="button" data-size="compact">Compact</button>
+            <button class="demo-button" type="button" data-size="wide">Wide</button>
+          </div>
+          <button class="demo-icon-button is-collapsed" type="button" id="toggleAllRows" aria-label="전체 펼치기" title="전체 펼치기"></button>
+        </div>
+      </header>
+
+      <section id="gantt"></section>
+    </main>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="../dist/jquery.custom-gantt.js?v=20260524-28"></script>
+    <script>
+      $(function () {
+        var isAllCollapsed = true;
+        var baseOptions = {
+          title: '회사 프로젝트 6개월 로드맵',
+          data: [],
+          startDate: '2026-01-05',
+          endDate: '2026-07-31',
+          dayWidth: 28,
+          weekWidth: 78,
+          monthWidth: 112,
+          viewMode: 'day',
+          initialCenterDate: 'today',
+          initialCollapsed: true,
+          excludeWeekends: true,
+          colorTheme: 'modern'
+        };
+
+        $.getJSON('../data/project-schedule.json')
+          .done(function (data) {
+            $('#gantt').customGantt($.extend({}, baseOptions, { data: data }));
+          })
+          .fail(function () {
+            $('#gantt').html('<div class="custom-gantt"><div class="cg-empty">일정 JSON을 불러오지 못했습니다.</div></div>');
+          });
+
+        $('[data-view-mode]').on('click', function () {
+          var viewMode = $(this).data('view-mode');
+
+          $('[data-view-mode]').removeClass('is-active');
+          $(this).addClass('is-active');
+          $('#gantt').customGantt({
+            viewMode: viewMode
+          });
+        });
+
+        $('[data-size]').on('click', function () {
+          var size = $(this).data('size');
+          var widthOptions = size === 'wide'
+            ? { dayWidth: 42, weekWidth: 116, monthWidth: 156 }
+            : { dayWidth: 28, weekWidth: 78, monthWidth: 112 };
+
+          $('[data-size]').removeClass('is-active');
+          $(this).addClass('is-active');
+          $('#gantt').customGantt({
+            dayWidth: widthOptions.dayWidth,
+            weekWidth: widthOptions.weekWidth,
+            monthWidth: widthOptions.monthWidth
+          });
+        });
+
+        $('#toggleAllRows').on('click', function () {
+          isAllCollapsed = !isAllCollapsed;
+
+          $('#gantt').customGantt(isAllCollapsed ? 'collapseAll' : 'expandAll');
+          $(this)
+            .toggleClass('is-collapsed', isAllCollapsed)
+            .attr('aria-label', isAllCollapsed ? '전체 펼치기' : '전체 접기')
+            .attr('title', isAllCollapsed ? '전체 펼치기' : '전체 접기');
+        });
+
+      });
+    </script>
+  </body>
+</html>
