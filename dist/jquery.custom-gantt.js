@@ -13,9 +13,7 @@
   var instanceCount = 0;
   var rowAnimationMs = 120;
   var colorThemes = {
-    modern: ['#2563eb', '#0891b2', '#16a34a', '#7c3aed', '#ea580c', '#dc2626'],
-    calm: ['#0f766e', '#3b82f6', '#64748b', '#84cc16', '#a855f7', '#f59e0b'],
-    vivid: ['#e11d48', '#9333ea', '#0284c7', '#059669', '#ca8a04', '#db2777']
+    default: ['#2563eb', '#0891b2', '#16a34a', '#7c3aed', '#ea580c', '#dc2626']
   };
   var defaults = {
     data: [],
@@ -32,12 +30,14 @@
     initialCenterDate: null,
     initialCollapsed: false,
     excludeWeekends: false,
-    colorTheme: 'modern'
+    colorTheme: 'default',
+    ignoreDataColors: false
   };
 
   function CustomGantt(element, options) {
     this.$element = $(element);
     this.eventNamespace = '.' + pluginName + instanceCount;
+    this.modalEventNamespace = '.modal' + pluginName + instanceCount;
     instanceCount += 1;
     this.options = $.extend({}, defaults, options);
     this.rows = [];
@@ -65,8 +65,10 @@
 
   CustomGantt.prototype.destroy = function () {
     $(document).off(this.eventNamespace);
+    $(document).off(this.modalEventNamespace);
     this.closeTaskContextMenu();
     this.hideTaskTooltip();
+    this.closeDetailModal();
     this.$element.removeData(pluginName).empty().removeClass('custom-gantt');
   };
 
@@ -146,6 +148,7 @@
         .toggleClass('is-collapsed', !!this.collapsed[row.id])
         .toggleClass('is-entering', !!enteringRowIds[row.id])
         .attr('data-row-id', row.id)
+        .data('row', row)
         .css('height', opts.rowHeight);
 
       if (row.type !== 'small') {
@@ -213,6 +216,7 @@
         .toggleClass('is-group', row.type !== 'small')
         .toggleClass('is-entering', !!enteringRowIds[row.id])
         .attr('data-row-id', row.id)
+        .data('row', row)
         .css({
           gridTemplateColumns: gridTemplate,
           height: opts.rowHeight
@@ -252,6 +256,53 @@
       var rowId = $(this).attr('data-row-id');
       self.toggleRow(rowId);
     });
+
+    this.$element.find('.cg-row-label.is-small').on('click', function () {
+      self.openDetailModal($(this).data('row'));
+    });
+  };
+
+  CustomGantt.prototype.openDetailModal = function (row) {
+    var opts = this.options;
+    var $overlay = $('<div class="cg-modal-overlay">');
+    var $modal = $('<div class="cg-detail-modal" role="dialog" aria-modal="true">')
+      .append(
+        $('<div class="cg-modal-header">')
+          .append($('<h3 class="cg-modal-title">').text(row.label))
+          .append($('<button class="cg-modal-close" type="button" aria-label="닫기">').text('×'))
+      )
+      .append(
+        $('<div class="cg-modal-body">')
+          .append(renderDetailItem('일정명', row.label))
+          .append(renderDetailItem('시작일', formatDate(row.start, opts.locale)))
+          .append(renderDetailItem('종료일', formatDate(row.end, opts.locale)))
+          .append(renderDetailItem('진행률', row.progress + '%'))
+          .append(renderDetailItem('색상', row.color || '-'))
+      );
+
+    this.closeDetailModal();
+    $overlay.append($modal);
+    $('body').append($overlay);
+    $overlay.on('click', function (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    $modal.on('click', function (event) {
+      event.stopPropagation();
+    });
+    $modal.find('.cg-modal-close').on('click', this.closeDetailModal.bind(this));
+    $(document).on('keydown' + this.modalEventNamespace, this.handleModalKeydown.bind(this));
+  };
+
+  CustomGantt.prototype.handleModalKeydown = function (event) {
+    if (event.key === 'Escape') {
+      this.closeDetailModal();
+    }
+  };
+
+  CustomGantt.prototype.closeDetailModal = function () {
+    $('.cg-modal-overlay').remove();
+    $(document).off(this.modalEventNamespace);
   };
 
   CustomGantt.prototype.toggleRow = function (rowId) {
@@ -553,7 +604,7 @@
         rows.push({ type: 'medium', id: mediumId, parentId: largeId, label: mediumGroup.medium || mediumGroup.name || '중분류' });
 
         (mediumGroup.children || []).forEach(function (task) {
-          var taskColor = task.color || palette[colorIndex % palette.length];
+          var taskColor = options.ignoreDataColors ? palette[colorIndex % palette.length] : task.color || palette[colorIndex % palette.length];
 
           rows.push({
             type: 'small',
@@ -612,6 +663,7 @@
       row.progress = Math.round(tasks.reduce(function (sum, task) {
         return sum + task.progress;
       }, 0) / tasks.length);
+      row.color = tasks[0].color;
       row.isSummary = true;
     });
 
@@ -984,6 +1036,12 @@
       .append($('<span class="cg-context-value">').text(value));
   }
 
+  function renderDetailItem(label, value) {
+    return $('<div class="cg-detail-item">')
+      .append($('<span class="cg-detail-label">').text(label))
+      .append($('<span class="cg-detail-value">').text(value));
+  }
+
   function positionFloatingElement($menu, clientX, clientY) {
     var margin = 10;
     var menuWidth = $menu.outerWidth();
@@ -1002,7 +1060,7 @@
   }
 
   function getColorPalette(themeName) {
-    return colorThemes[themeName] || colorThemes.modern;
+    return colorThemes[themeName] || colorThemes.default;
   }
 
   function normalizeViewMode(viewMode) {

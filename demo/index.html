@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>jQuery Custom Gantt Demo</title>
-    <link rel="stylesheet" href="../dist/jquery.custom-gantt.css?v=20260524-28" />
+    <link rel="stylesheet" href="../dist/jquery.custom-gantt.css?v=20260525-11" />
     <style>
       html,
       body {
@@ -168,7 +168,7 @@
     </main>
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="../dist/jquery.custom-gantt.js?v=20260524-28"></script>
+    <script src="../dist/jquery.custom-gantt.js?v=20260525-11"></script>
     <script>
       $(function () {
         var isAllCollapsed = true;
@@ -184,7 +184,8 @@
           initialCenterDate: 'today',
           initialCollapsed: true,
           excludeWeekends: true,
-          colorTheme: 'modern'
+          colorTheme: 'default',
+          ignoreDataColors: false
         };
 
         $.getJSON('../data/project-schedule.json')

@@ -64,7 +64,8 @@
 | `initialCenterDate` | `String|Date|null` | `null` | 초기 렌더링 후 중앙에 맞출 날짜. `YYYY-MM-DD`, `Date`, `today` 지원 |
 | `initialCollapsed` | `Boolean` | `false` | 초기 렌더링 시 대/중분류를 모두 접은 상태로 시작할지 여부 |
 | `excludeWeekends` | `Boolean` | `false` | `day` 보기에서 토/일 날짜 컬럼을 제외할지 여부 |
-| `colorTheme` | `String` | `modern` | 색상이 없는 일정에 자동 적용할 테마. `modern`, `calm`, `vivid` 지원 |
+| `colorTheme` | `String` | `default` | 색상이 없는 일정에 자동 적용할 기본 테마 |
+| `ignoreDataColors` | `Boolean` | `false` | 데이터의 `color` 값을 무시하고 `colorTheme` 색상을 강제로 적용할지 여부 |
 
 ## 보기 단위와 접기/펼치기
 
@@ -75,7 +76,8 @@ $('#chart').customGantt({
   initialCenterDate: 'today',
   initialCollapsed: true,
   excludeWeekends: true,
-  colorTheme: 'calm'
+  colorTheme: 'default',
+  ignoreDataColors: true
 });
 
 $('#chart').customGantt({ viewMode: 'month' });
@@ -87,12 +89,13 @@ $('#chart').customGantt('expandAll');
 
 ## 색상 테마와 텍스트 대비
 
-각 소분류 데이터에 `color`가 있으면 해당 색상을 그대로 사용합니다. `color`가 없으면 `colorTheme` 팔레트에서 자동으로 색상이 배정됩니다.
+각 소분류 데이터에 `color`가 있으면 기본적으로 해당 색상을 그대로 사용합니다. `color`가 없으면 `colorTheme` 팔레트에서 자동으로 색상이 배정됩니다. `ignoreDataColors`를 켜면 데이터의 `color`를 무시하고 테마 색상을 강제로 적용합니다.
 
 ```js
 $('#chart').customGantt({
   data: ganttData,
-  colorTheme: 'vivid'
+  colorTheme: 'default',
+  ignoreDataColors: true
 });
 ```
 
