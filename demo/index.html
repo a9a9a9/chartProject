@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>jQuery Custom Gantt Demo</title>
-    <link rel="stylesheet" href="../dist/jquery.custom-gantt.css?v=20260525-11" />
+    <link rel="stylesheet" href="../dist/jquery.custom-gantt.css?v=20260528-5" />
     <style>
       html,
       body {
@@ -152,7 +152,7 @@
         </div>
         <div class="demo-actions">
           <div class="demo-toggle" aria-label="날짜 보기 단위">
-            <button class="demo-button is-active" type="button" data-view-mode="day">일별</button>
+            <button class="demo-button" type="button" data-view-mode="day">일별</button>
             <button class="demo-button" type="button" data-view-mode="week">주별</button>
             <button class="demo-button" type="button" data-view-mode="month">월별</button>
           </div>
@@ -160,7 +160,12 @@
             <button class="demo-button is-active" type="button" data-size="compact">Compact</button>
             <button class="demo-button" type="button" data-size="wide">Wide</button>
           </div>
-          <button class="demo-icon-button is-collapsed" type="button" id="toggleAllRows" aria-label="전체 펼치기" title="전체 펼치기"></button>
+          <div class="demo-toggle" aria-label="분류 펼침 단계">
+            <button class="demo-button" type="button" data-expand-level="large">대분류</button>
+            <button class="demo-button" type="button" data-expand-level="medium">중분류</button>
+            <button class="demo-button" type="button" data-expand-level="small">소분류</button>
+          </div>
+          <button style="display: none;" class="demo-icon-button is-collapsed" type="button" id="toggleAllRows" aria-label="전체 펼치기" title="전체 펼치기"></button>
         </div>
       </header>
 
@@ -168,33 +173,90 @@
     </main>
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="../dist/jquery.custom-gantt.js?v=20260525-11"></script>
+    <script src="../dist/jquery.custom-gantt.js?v=20260528-9"></script>
     <script>
       $(function () {
         var isAllCollapsed = true;
         var baseOptions = {
           title: '회사 프로젝트 6개월 로드맵',
           data: [],
-          startDate: '2026-01-05',
-          endDate: '2026-07-31',
           dayWidth: 28,
           weekWidth: 78,
           monthWidth: 112,
-          viewMode: 'day',
-          initialCenterDate: 'today',
+          viewMode: 'week',
+          initialCenterDate: 'start',
           initialCollapsed: true,
+          initialExpandLevel: 'small',
           excludeWeekends: true,
           colorTheme: 'default',
-          ignoreDataColors: false
+          ignoreDataColors: false,
+          colorRenderer: function (item) {
+            /* if (item.status === 'done' || item.status === 'FINISHED') {
+              return 'green';
+            }
+
+            if (item.status === 'risk') {
+              return 'red';
+            }
+
+            if (item.status === 'hold' || item.status === 'READY') {
+              return 'orange';
+            } */
+
+            if(item.type == 'large') return '#213448'; 
+            if(item.type == 'medium') return '#547792'; 
+            if(item.type == 'small') return '#BBD9F0'; 
+
+            return null;
+          },
+          barLabelRenderer: function (item, context) {
+            return item.status + ' · ' + context.progress + '%';
+            //return context.progress + '%';
+          }
         };
+
+        syncDemoButtons(baseOptions);
 
         $.getJSON('../data/project-schedule.json')
           .done(function (data) {
-            $('#gantt').customGantt($.extend({}, baseOptions, { data: data }));
+            $('#gantt').customGantt($.extend({}, baseOptions, { data: normalizeGanttData(data) }));
           })
           .fail(function () {
             $('#gantt').html('<div class="custom-gantt"><div class="cg-empty">일정 JSON을 불러오지 못했습니다.</div></div>');
           });
+
+        function normalizeGanttData(data) {
+          if (data && data.largeList && data.mediumList && data.smallList) {
+            return $.customGantt.buildHierarchy(data.largeList, data.mediumList, data.smallList);
+          }
+
+          return data;
+        }
+
+        function getInitialExpandLevel(options) {
+          if (options.initialExpandLevel) {
+            return options.initialExpandLevel;
+          }
+
+          return options.initialCollapsed ? 'large' : 'small';
+        }
+
+        function syncDemoButtons(options) {
+          var viewMode = options.viewMode || 'day';
+          var expandLevel = getInitialExpandLevel(options);
+
+          $('[data-view-mode]').removeClass('is-active');
+          $('[data-view-mode="' + viewMode + '"]').addClass('is-active');
+
+          $('[data-expand-level]').removeClass('is-active');
+          $('[data-expand-level="' + expandLevel + '"]').addClass('is-active');
+
+          isAllCollapsed = expandLevel === 'large';
+          $('#toggleAllRows')
+            .toggleClass('is-collapsed', isAllCollapsed)
+            .attr('aria-label', isAllCollapsed ? '전체 펼치기' : '전체 접기')
+            .attr('title', isAllCollapsed ? '전체 펼치기' : '전체 접기');
+        }
 
         $('[data-view-mode]').on('click', function () {
           var viewMode = $(this).data('view-mode');
@@ -221,10 +283,26 @@
           });
         });
 
+        $('[data-expand-level]').on('click', function () {
+          var level = $(this).data('expand-level');
+          var isCollapsedLevel = level === 'large';
+
+          $('[data-expand-level]').removeClass('is-active');
+          $(this).addClass('is-active');
+          isAllCollapsed = isCollapsedLevel;
+          $('#gantt').customGantt('expandToLevel', level);
+          $('#toggleAllRows')
+            .toggleClass('is-collapsed', isAllCollapsed)
+            .attr('aria-label', isAllCollapsed ? '전체 펼치기' : '전체 접기')
+            .attr('title', isAllCollapsed ? '전체 펼치기' : '전체 접기');
+        });
+
         $('#toggleAllRows').on('click', function () {
           isAllCollapsed = !isAllCollapsed;
 
           $('#gantt').customGantt(isAllCollapsed ? 'collapseAll' : 'expandAll');
+          $('[data-expand-level]').removeClass('is-active');
+          $('[data-expand-level="' + (isAllCollapsed ? 'large' : 'small') + '"]').addClass('is-active');
           $(this)
             .toggleClass('is-collapsed', isAllCollapsed)
             .attr('aria-label', isAllCollapsed ? '전체 펼치기' : '전체 접기')

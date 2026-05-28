@@ -29,9 +29,12 @@
     viewMode: 'day',
     initialCenterDate: null,
     initialCollapsed: false,
+    initialExpandLevel: null,
     excludeWeekends: false,
     colorTheme: 'default',
-    ignoreDataColors: false
+    ignoreDataColors: false,
+    colorRenderer: null,
+    barLabelRenderer: null
   };
 
   function CustomGantt(element, options) {
@@ -90,22 +93,40 @@
     this.render();
   };
 
-  CustomGantt.prototype.applyInitialCollapsedState = function () {
-    var self = this;
+  CustomGantt.prototype.expandToLevel = function (level) {
+    this.rememberScrollPosition();
+    this.applyCollapsedLevel(level);
+    this.render();
+  };
 
+  CustomGantt.prototype.applyInitialCollapsedState = function () {
     if (this.initialStateApplied) {
       return;
     }
 
-    if (this.options.initialCollapsed) {
-      this.rows.forEach(function (row) {
-        if (row.type !== 'small') {
-          self.collapsed[row.id] = true;
-        }
-      });
-    }
+    this.applyCollapsedLevel(getInitialExpandLevel(this.options));
 
     this.initialStateApplied = true;
+  };
+
+  CustomGantt.prototype.applyCollapsedLevel = function (level) {
+    var self = this;
+    var targetDepth = {
+      large: 1,
+      medium: 2,
+      small: 3
+    }[level] || 3;
+
+    this.collapsed = {};
+    this.rows.forEach(function (row) {
+      if (row.type === 'large') {
+        self.collapsed[row.id] = targetDepth <= 1;
+      }
+
+      if (row.type === 'medium') {
+        self.collapsed[row.id] = targetDepth <= 2;
+      }
+    });
   };
 
   CustomGantt.prototype.render = function () {
@@ -226,7 +247,7 @@
         $gridRow.append($('<div class="cg-grid-cell">').toggleClass('is-weekend', unit.isWeekend));
       });
 
-      if (row.type === 'small' || (self.collapsed[row.id] && row.start && row.end)) {
+      if (row.start && row.end) {
         if (row.isSummary) {
           $gridRow.append(renderSummaryLead(row, self.units, unitWidth));
         }
@@ -276,7 +297,8 @@
           .append(renderDetailItem('일정명', row.label))
           .append(renderDetailItem('시작일', formatDate(row.start, opts.locale)))
           .append(renderDetailItem('종료일', formatDate(row.end, opts.locale)))
-          .append(renderDetailItem('진행률', row.progress + '%'))
+          .append(renderDetailItem('상태', row.status || '-'))
+          .append(renderDetailItem('진행률', clamp(row.progress, 0, 100) + '%'))
           .append(renderDetailItem('색상', row.color || '-'))
       );
 
@@ -473,7 +495,8 @@
       .append($('<div class="cg-context-title">').text(row.label))
       .append(renderContextRow('유형', typeText))
       .append(renderContextRow('기간', formatDate(row.start, opts.locale) + ' - ' + formatDate(row.end, opts.locale)))
-      .append(renderContextRow('진행률', row.progress + '%'));
+      .append(renderContextRow('상태', row.status || '-'))
+      .append(renderContextRow('진행률', clamp(row.progress, 0, 100) + '%'));
 
     this.closeTaskContextMenu();
     $('body').append($menu);
@@ -530,33 +553,41 @@
 
   CustomGantt.prototype.applyInitialCenterScroll = function () {
     var self = this;
-    var centerDate = parseDate(this.options.initialCenterDate);
+    var initialPosition = getInitialCenterPosition(this.options.initialCenterDate, this.units);
 
-    if (this.initialScrollApplied || !centerDate || !this.units.length) {
+    if (this.initialScrollApplied || !initialPosition || !this.units.length) {
       return;
     }
 
     this.initialScrollApplied = true;
     if (window.requestAnimationFrame) {
       window.requestAnimationFrame(function () {
-        self.scrollToDate(centerDate);
+        self.scrollToDate(initialPosition.date, initialPosition.align);
       });
     } else {
       window.setTimeout(function () {
-        self.scrollToDate(centerDate);
+        self.scrollToDate(initialPosition.date, initialPosition.align);
       }, 0);
     }
   };
 
-  CustomGantt.prototype.scrollToDate = function (date) {
+  CustomGantt.prototype.scrollToDate = function (date, align) {
     var $scroll = this.$element.find('.cg-scroll');
     var unitWidth = getUnitWidth(this.options);
     var sidebarWidth = this.$element.find('.cg-sidebar').outerWidth() || 0;
     var viewportWidth = Math.max($scroll.innerWidth() - sidebarWidth, 0);
     var targetOffset = dateToOffset(date, this.units, unitWidth);
-    var scrollLeft = Math.max(targetOffset - (viewportWidth / 2), 0);
+    var scrollLeft;
 
-    $scroll.scrollLeft(scrollLeft);
+    if (align === 'start') {
+      scrollLeft = targetOffset;
+    } else if (align === 'end') {
+      scrollLeft = targetOffset - viewportWidth + unitWidth;
+    } else {
+      scrollLeft = targetOffset - (viewportWidth / 2);
+    }
+
+    $scroll.scrollLeft(Math.max(scrollLeft, 0));
   };
 
   function renderToggleAllButton(rows, collapsed) {
@@ -596,26 +627,30 @@
     (data || []).forEach(function (largeGroup, largeIndex) {
       var largeId = 'large-' + largeIndex;
 
-      rows.push({ type: 'large', id: largeId, label: largeGroup.large || largeGroup.name || '대분류' });
+      rows.push(createRowFromData(largeGroup, {
+        type: 'large',
+        id: largeId,
+        label: largeGroup.large || largeGroup.name || '대분류'
+      }, options, palette, colorIndex));
 
       (largeGroup.children || []).forEach(function (mediumGroup, mediumIndex) {
         var mediumId = largeId + '-medium-' + mediumIndex;
 
-        rows.push({ type: 'medium', id: mediumId, parentId: largeId, label: mediumGroup.medium || mediumGroup.name || '중분류' });
+        rows.push(createRowFromData(mediumGroup, {
+          type: 'medium',
+          id: mediumId,
+          parentId: largeId,
+          label: mediumGroup.medium || mediumGroup.name || '중분류'
+        }, options, palette, colorIndex));
 
         (mediumGroup.children || []).forEach(function (task) {
-          var taskColor = options.ignoreDataColors ? palette[colorIndex % palette.length] : task.color || palette[colorIndex % palette.length];
-
-          rows.push({
+          rows.push(createRowFromData(task, {
             type: 'small',
             id: mediumId + '-small-' + rows.length,
             parentId: mediumId,
             label: task.small || task.name || '작업',
-            start: parseDate(task.start),
-            end: parseDate(task.end),
-            progress: clamp(task.progress || 0, 0, 100),
-            color: taskColor
-          });
+            progress: 0
+          }, options, palette, colorIndex));
           colorIndex += 1;
         });
       });
@@ -654,20 +689,67 @@
         return;
       }
 
-      row.start = minDate(tasks.map(function (task) {
+      row.start = row.start || minDate(tasks.map(function (task) {
         return task.start;
       }));
-      row.end = maxDate(tasks.map(function (task) {
+      row.end = row.end || maxDate(tasks.map(function (task) {
         return task.end;
       }));
-      row.progress = Math.round(tasks.reduce(function (sum, task) {
+      row.progress = row.hasOwnProgress ? row.progress : Math.round(tasks.reduce(function (sum, task) {
         return sum + task.progress;
       }, 0) / tasks.length);
-      row.color = tasks[0].color;
+      row.color = row.color || tasks[0].color;
       row.isSummary = true;
     });
 
     return rows;
+  }
+
+  function createRowFromData(data, row, options, palette, colorIndex) {
+    data = data || {};
+
+    var parsedStart = parseDate(data.start);
+    var parsedEnd = parseDate(data.end);
+    var hasOwnProgress = data.progress !== undefined && data.progress !== null;
+
+    row.source = data;
+    row.sourceType = data.type;
+    row.start = parsedStart || row.start || null;
+    row.end = parsedEnd || row.end || null;
+    row.status = data.status;
+    row.hasOwnProgress = hasOwnProgress;
+    row.progress = hasOwnProgress ? clamp(data.progress, 0, 100) : row.progress;
+    row.color = resolveRowColor(data, row, options, palette, colorIndex);
+
+    return row;
+  }
+
+  function resolveRowColor(data, row, options, palette, colorIndex) {
+    var renderedColor = callColorRenderer(data, row, options);
+
+    if (renderedColor) {
+      return normalizeColor(renderedColor);
+    }
+
+    if (!options.ignoreDataColors && data.color) {
+      return normalizeColor(data.color);
+    }
+
+    return row.type === 'small' ? normalizeColor(palette[colorIndex % palette.length]) : null;
+  }
+
+  function callColorRenderer(data, row, options) {
+    if (typeof options.colorRenderer !== 'function') {
+      return null;
+    }
+
+    return options.colorRenderer(data, {
+      row: row,
+      type: row.type,
+      status: data.status,
+      progress: row.progress,
+      source: data
+    });
   }
 
   function getVisibleRows(rows, collapsed) {
@@ -725,10 +807,12 @@
       mediumId: 'id',
       mediumLargeId: 'largeId',
       mediumName: 'name',
+      smallId: 'id',
       smallMediumId: 'mediumId',
       smallName: 'name',
       start: 'start',
       end: 'end',
+      status: 'status',
       progress: 'progress',
       color: 'color'
     }, options);
@@ -740,10 +824,16 @@
       var largeId = getValue(largeItem, fields.largeId);
       var largeGroup = {
         large: getValue(largeItem, fields.largeName) || largeItem.large || '대분류',
+        id: largeId,
+        type: largeItem.type || 'large',
+        start: getValue(largeItem, fields.start),
+        end: getValue(largeItem, fields.end),
+        status: getValue(largeItem, fields.status),
+        progress: getValue(largeItem, fields.progress),
         children: []
       };
 
-      copyExtraFields(largeItem, largeGroup, [fields.largeId, fields.largeName, 'large', 'children']);
+      copyExtraFields(largeItem, largeGroup, [fields.largeId, fields.largeName, fields.start, fields.end, fields.status, fields.progress, 'large', 'children']);
       largeMap[largeId] = largeGroup;
       hierarchy.push(largeGroup);
     });
@@ -754,6 +844,12 @@
       var largeGroup = largeMap[parentLargeId];
       var mediumGroup = {
         medium: getValue(mediumItem, fields.mediumName) || mediumItem.medium || '중분류',
+        id: mediumId,
+        type: mediumItem.type || 'medium',
+        start: getValue(mediumItem, fields.start),
+        end: getValue(mediumItem, fields.end),
+        status: getValue(mediumItem, fields.status),
+        progress: getValue(mediumItem, fields.progress),
         children: []
       };
 
@@ -761,6 +857,10 @@
         fields.mediumId,
         fields.mediumLargeId,
         fields.mediumName,
+        fields.start,
+        fields.end,
+        fields.status,
+        fields.progress,
         'medium',
         'children'
       ]);
@@ -776,8 +876,11 @@
       var mediumGroup = mediumMap[parentMediumId];
       var task = {
         small: getValue(smallItem, fields.smallName) || smallItem.small || '작업',
+        id: getValue(smallItem, fields.smallId),
+        type: smallItem.type || 'small',
         start: getValue(smallItem, fields.start),
         end: getValue(smallItem, fields.end),
+        status: getValue(smallItem, fields.status),
         progress: getValue(smallItem, fields.progress) || 0
       };
       var color = getValue(smallItem, fields.color);
@@ -788,9 +891,11 @@
 
       copyExtraFields(smallItem, task, [
         fields.smallMediumId,
+        fields.smallId,
         fields.smallName,
         fields.start,
         fields.end,
+        fields.status,
         fields.progress,
         fields.color,
         'small'
@@ -861,16 +966,18 @@
       return $();
     }
 
+    var progress = clamp(row.progress, 0, 100);
     var color = row.color || (row.isSummary ? '#334155' : getColorPalette(options.colorTheme)[0]);
+    var label = getBarLabel(row, progress, options);
     var textColor = getReadableTextColor(color);
     var $bar = $('<div class="cg-task-bar">')
       .toggleClass('is-summary', !!row.isSummary)
       .data('taskRow', row)
       .css({ left: metrics.left, width: metrics.width });
-    var $progress = $('<div class="cg-task-progress">').css('width', row.progress + '%');
+    var $progress = $('<div class="cg-task-progress">').css('width', progress + '%');
     var $name = $('<div class="cg-task-name">')
       .css('color', textColor)
-      .append($('<span class="cg-task-name-text">').text(row.label + ' ' + row.progress + '%'));
+      .append($('<span class="cg-task-name-text">').text(label));
 
     if (color) {
       $bar.css({
@@ -881,6 +988,26 @@
     }
 
     return $bar.append($progress, $name);
+  }
+
+  function getBarLabel(row, progress, options) {
+    var label;
+
+    if (typeof options.barLabelRenderer === 'function') {
+      label = options.barLabelRenderer(row.source || row, {
+        row: row,
+        type: row.type,
+        status: row.status,
+        progress: progress,
+        source: row.source || row
+      });
+    }
+
+    if (label === null || label === undefined) {
+      return row.label + ' ' + progress + '%';
+    }
+
+    return String(label);
   }
 
   function renderSummaryLead(row, units, unitWidth) {
@@ -942,6 +1069,32 @@
 
     var parsed = new Date(value + 'T00:00:00');
     return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function getInitialCenterPosition(value, units) {
+    if (!value || !units.length) {
+      return null;
+    }
+
+    if (value === 'start') {
+      return {
+        date: units[0].start,
+        align: 'start'
+      };
+    }
+
+    if (value === 'end') {
+      return {
+        date: units[units.length - 1].end,
+        align: 'end'
+      };
+    }
+
+    var date = parseDate(value);
+    return date ? {
+      date: date,
+      align: 'center'
+    } : null;
   }
 
   function stripTime(date) {
@@ -1026,6 +1179,10 @@
     return String(value).padStart(2, '0');
   }
 
+  function padHex(value) {
+    return String(value).padStart(2, '0');
+  }
+
   function clamp(value, min, max) {
     return Math.min(Math.max(Number(value) || 0, min), max);
   }
@@ -1061,6 +1218,79 @@
 
   function getColorPalette(themeName) {
     return colorThemes[themeName] || colorThemes.default;
+  }
+
+  function getInitialExpandLevel(options) {
+    if (options.initialExpandLevel) {
+      return options.initialExpandLevel;
+    }
+
+    return options.initialCollapsed ? 'large' : 'small';
+  }
+
+  function normalizeColor(color) {
+    if (!color || typeof color !== 'string') {
+      return null;
+    }
+
+    var value = color.trim();
+    var namedColorMap = {
+      black: '#000000',
+      blue: '#0000ff',
+      cyan: '#00ffff',
+      gray: '#808080',
+      green: '#008000',
+      grey: '#808080',
+      orange: '#ffa500',
+      pink: '#ffc0cb',
+      purple: '#800080',
+      red: '#ff0000',
+      slate: '#64748b',
+      teal: '#008080',
+      white: '#ffffff',
+      yellow: '#ffff00'
+    };
+    var lowerValue = value.toLowerCase();
+    var rgb = parseHexColor(value) || parseRgbColor(value);
+
+    if (rgb) {
+      return rgbToHex(rgb);
+    }
+
+    if (namedColorMap[lowerValue]) {
+      return namedColorMap[lowerValue];
+    }
+
+    return resolveCssColorName(value) || value;
+  }
+
+  function resolveCssColorName(color) {
+    if (typeof document === 'undefined' || !document.body) {
+      return null;
+    }
+
+    var probe = document.createElement('span');
+
+    probe.style.color = '';
+    probe.style.color = color;
+
+    if (!probe.style.color) {
+      return null;
+    }
+
+    var $probe = $(probe).css('display', 'none').appendTo(document.body);
+    var computedColor = $probe.css('color');
+
+    $probe.remove();
+
+    var rgb = parseRgbColor(computedColor);
+    return rgb ? rgbToHex(rgb) : null;
+  }
+
+  function rgbToHex(rgb) {
+    return '#' + [rgb.red, rgb.green, rgb.blue].map(function (value) {
+      return padHex(Math.max(0, Math.min(255, value)).toString(16));
+    }).join('');
   }
 
   function normalizeViewMode(viewMode) {
@@ -1150,7 +1380,7 @@
   }
 
   function hexToRgba(hex, alpha) {
-    var rgb = parseHexColor(hex);
+    var rgb = parseHexColor(hex) || parseRgbColor(hex);
 
     if (!rgb) {
       return 'rgba(37, 99, 235, ' + alpha + ')';
@@ -1160,7 +1390,7 @@
   }
 
   function getReadableTextColor(hex) {
-    var rgb = parseHexColor(hex);
+    var rgb = parseHexColor(hex) || parseRgbColor(hex);
 
     if (!rgb) {
       return '#0f172a';
@@ -1193,6 +1423,24 @@
       red: (intValue >> 16) & 255,
       green: (intValue >> 8) & 255,
       blue: intValue & 255
+    };
+  }
+
+  function parseRgbColor(color) {
+    if (!color || typeof color !== 'string') {
+      return null;
+    }
+
+    var match = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+
+    if (!match) {
+      return null;
+    }
+
+    return {
+      red: Number(match[1]),
+      green: Number(match[2]),
+      blue: Number(match[3])
     };
   }
 
