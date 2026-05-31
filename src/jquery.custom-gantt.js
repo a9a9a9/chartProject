@@ -168,7 +168,9 @@
         .toggleClass('is-collapsible', row.type !== 'small')
         .toggleClass('is-collapsed', !!this.collapsed[row.id])
         .toggleClass('is-entering', !!enteringRowIds[row.id])
+        .toggleClass('has-date-error', !!row.invalidDateRange)
         .attr('data-row-id', row.id)
+        .attr('title', row.invalidDateRange ? '시작일이 종료일보다 늦습니다.' : null)
         .data('row', row)
         .css('height', opts.rowHeight);
 
@@ -236,6 +238,7 @@
       var $gridRow = $('<div class="cg-grid-row">')
         .toggleClass('is-group', row.type !== 'small')
         .toggleClass('is-entering', !!enteringRowIds[row.id])
+        .toggleClass('has-date-error', !!row.invalidDateRange)
         .attr('data-row-id', row.id)
         .data('row', row)
         .css({
@@ -247,9 +250,11 @@
         $gridRow.append($('<div class="cg-grid-cell">').toggleClass('is-weekend', unit.isWeekend));
       });
 
-      if (row.start && row.end) {
+      if (row.invalidDateRange) {
+        $gridRow.append(renderDateRangeError(row, opts));
+      } else if (row.start && row.end) {
         if (row.isSummary) {
-          $gridRow.append(renderSummaryLead(row, self.units, unitWidth));
+          $gridRow.append(renderSummaryLead(row, self.units, unitWidth, opts));
         }
         $gridRow.append(renderTaskBar(row, self.units, unitWidth, opts));
       }
@@ -465,7 +470,7 @@
   CustomGantt.prototype.bindTaskContextMenu = function () {
     var self = this;
 
-    this.$element.find('.cg-task-bar').on('contextmenu', function (event) {
+    this.$element.find('.cg-task-bar, .cg-date-range-error').on('contextmenu', function (event) {
       event.preventDefault();
       event.stopPropagation();
       self.openTaskContextMenu($(this).data('taskRow'), event.clientX, event.clientY);
@@ -492,11 +497,16 @@
     var opts = this.options;
     var typeText = row.isSummary ? '요약 일정' : '작업 일정';
     var $menu = $('<div class="cg-context-menu" role="menu">')
+      .toggleClass('has-date-error', !!row.invalidDateRange)
       .append($('<div class="cg-context-title">').text(row.label))
       .append(renderContextRow('유형', typeText))
       .append(renderContextRow('기간', formatDate(row.start, opts.locale) + ' - ' + formatDate(row.end, opts.locale)))
       .append(renderContextRow('상태', row.status || '-'))
       .append(renderContextRow('진행률', clamp(row.progress, 0, 100) + '%'));
+
+    if (row.invalidDateRange) {
+      $menu.prepend(renderDateRangeContextError());
+    }
 
     this.closeTaskContextMenu();
     $('body').append($menu);
@@ -680,7 +690,7 @@
           break;
         }
 
-        if (nextRow.type === 'small' && nextRow.start && nextRow.end) {
+        if (nextRow.type === 'small' && !nextRow.invalidDateRange && nextRow.start && nextRow.end) {
           tasks.push(nextRow);
         }
       }
@@ -716,6 +726,7 @@
     row.sourceType = data.type;
     row.start = parsedStart || row.start || null;
     row.end = parsedEnd || row.end || null;
+    row.invalidDateRange = !!(parsedStart && parsedEnd && parsedStart > parsedEnd);
     row.status = data.status;
     row.hasOwnProgress = hasOwnProgress;
     row.progress = hasOwnProgress ? clamp(data.progress, 0, 100) : row.progress;
@@ -914,6 +925,10 @@
     var ends = [];
 
     rows.forEach(function (row) {
+      if (row.invalidDateRange) {
+        return;
+      }
+
       if (row.start) {
         starts.push(row.start);
       }
@@ -934,7 +949,15 @@
     start = stripTime(start);
     end = stripTime(end);
 
-    if (viewMode === 'week') {
+    if (viewMode === 'day') {
+      if (isLastDayOfMonth(start)) {
+        start = addDays(start, -4);
+      }
+
+      if (isFirstDayOfMonth(end)) {
+        end = addDays(end, 4);
+      }
+    } else if (viewMode === 'week') {
       start = startOfWeek(start);
     } else if (viewMode === 'month') {
       start = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -960,7 +983,7 @@
   }
 
   function renderTaskBar(row, units, unitWidth, options) {
-    var metrics = getTaskBarMetrics(row, units, unitWidth);
+    var metrics = getTaskBarMetrics(row, units, unitWidth, options);
 
     if (!metrics) {
       return $();
@@ -990,6 +1013,19 @@
     return $bar.append($progress, $name);
   }
 
+  function renderDateRangeError(row, options) {
+    return $('<div class="cg-date-range-error">')
+      .data('taskRow', row)
+      .attr('title', formatDate(row.start, options.locale) + ' - ' + formatDate(row.end, options.locale))
+      .text('날짜 정보가 올바르지 않습니다');
+  }
+
+  function renderDateRangeContextError() {
+    return $('<div class="cg-context-error">')
+      .append($('<span class="cg-context-error-icon">').text('!'))
+      .append($('<span>').text('시작일이 종료일보다 늦습니다.'));
+  }
+
   function getBarLabel(row, progress, options) {
     var label;
 
@@ -1010,8 +1046,8 @@
     return String(label);
   }
 
-  function renderSummaryLead(row, units, unitWidth) {
-    var metrics = getTaskBarMetrics(row, units, unitWidth);
+  function renderSummaryLead(row, units, unitWidth, options) {
+    var metrics = getTaskBarMetrics(row, units, unitWidth, options);
 
     if (!metrics || metrics.left <= 12) {
       return $();
@@ -1023,12 +1059,16 @@
     });
   }
 
-  function getTaskBarMetrics(row, units, unitWidth) {
+  function getTaskBarMetrics(row, units, unitWidth, options) {
     var start = stripTime(row.start);
     var end = stripTime(row.end);
 
     if (!start || !end) {
       return null;
+    }
+
+    if (normalizeViewMode(options.viewMode) === 'day' && options.excludeWeekends) {
+      end = moveWeekendEndToFriday(end);
     }
 
     var startOffset = dateToOffset(start, units, unitWidth);
@@ -1125,6 +1165,26 @@
 
   function isWeekend(date) {
     return date.getDay() === 0 || date.getDay() === 6;
+  }
+
+  function moveWeekendEndToFriday(date) {
+    if (date.getDay() === 6) {
+      return addDays(date, -1);
+    }
+
+    if (date.getDay() === 0) {
+      return addDays(date, -2);
+    }
+
+    return date;
+  }
+
+  function isFirstDayOfMonth(date) {
+    return date.getDate() === 1;
+  }
+
+  function isLastDayOfMonth(date) {
+    return date.getDate() === new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   }
 
   function formatDate(date, locale) {
