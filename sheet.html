@@ -408,4 +408,197 @@ function buildControl(item){
       const opts = [
         { val: "Y", text: "예" },
         { val: "N", text: "아니오" },
-        { val: "NULL", t
+        { val: "NULL", text: "해당없음" }
+      ];
+      const optsHtml = opts.map(o => `
+        <div class="radio-opt" data-val="${o.val}">
+          <input type="radio" name="radio-${item.id}" id="radio-${item.id}-${o.val}"
+                 data-id="${item.id}" data-role="radio-input" value="${o.val}">
+          <label for="radio-${item.id}-${o.val}">${o.text}</label>
+        </div>`).join("");
+      return `<div class="ctrl-radio">${optsHtml}</div>`;
+    }
+
+    case "checkbox":
+      return `
+        <div class="ctrl-checkbox">
+          <input type="checkbox" id="chk-${item.id}" data-id="${item.id}" data-role="checkbox-input">
+          <label for="chk-${item.id}">수행 완료</label>
+        </div>`;
+
+    case "number": {
+      const cfg = item.config || {};
+      const opSymbol = { "<=": "이하", ">=": "이상", "<": "미만", ">": "초과", "==": "일치" };
+      return `
+        <div class="ctrl-number">
+          <input type="number" data-id="${item.id}" data-role="number-input" placeholder="측정값">
+          <span class="condition-label">기준: ${cfg.threshold}${cfg.unit || ""} ${opSymbol[cfg.operator] || cfg.operator}</span>
+          <span class="verdict pending" data-role="verdict" data-id="${item.id}">미입력</span>
+        </div>`;
+    }
+
+    default:
+      return `<div class="ctrl-unknown">지원하지 않는 답변유형입니다: ${item.type}</div>`;
+  }
+}
+
+/* ==========================================================================
+   4) 전체 항목 렌더링
+   ========================================================================== */
+function renderChecklist(data){
+  const $list = $("#checklist").empty();
+
+  data.forEach(function(item, idx){
+    answerState[item.id] = { answered: false, verdict: null, required: !!item.required };
+
+    const $item = $(`
+      <div class="item" data-id="${item.id}" data-required="${!!item.required}">
+        <div class="item-num">${idx + 1}</div>
+        <div class="item-body">
+          <p class="item-question">
+            ${escapeHtml(item.question)}
+            ${item.required ? '<span class="req">*</span>' : ''}
+            <span class="item-type-tag">${TYPE_LABEL[item.type] || item.type}</span>
+          </p>
+          <div class="item-control">${buildControl(item)}</div>
+        </div>
+      </div>
+    `);
+
+    $list.append($item);
+  });
+
+  updateSummary();
+}
+
+function escapeHtml(str){
+  return $("<div>").text(str).html();
+}
+
+/* ==========================================================================
+   5) 부등식 판정 로직
+   ========================================================================== */
+function evaluateCondition(value, operator, threshold){
+  const v = parseFloat(value);
+  const t = parseFloat(threshold);
+  if (isNaN(v)) return null;
+  switch(operator){
+    case "<=": return v <= t;
+    case ">=": return v >= t;
+    case "<":  return v < t;
+    case ">":  return v > t;
+    case "==": return v === t;
+    default:   return null;
+  }
+}
+
+/* ==========================================================================
+   6) 상태 갱신 & 진행률/요약 표시
+   ========================================================================== */
+function setItemState(id, answered, verdict){
+  answerState[id].answered = answered;
+  answerState[id].verdict = verdict || null;
+
+  const $item = $(`.item[data-id="${id}"]`);
+  $item.toggleClass("is-answered", answered);
+  $item.toggleClass("is-fail", verdict === "fail");
+
+  updateSummary();
+}
+
+function updateSummary(){
+  const ids = Object.keys(answerState);
+  const total = ids.length;
+  const answered = ids.filter(id => answerState[id].answered).length;
+  const failCount = ids.filter(id => answerState[id].verdict === "fail").length;
+  const pct = total ? Math.round((answered / total) * 100) : 0;
+
+  $("#progressBar").css("width", pct + "%");
+  $("#gaugeText").text(pct + "%");
+  $("#summaryText").html(`응답 <b>${answered} / ${total}</b> · 부적합 <b>${failCount}</b>건`);
+}
+
+/* ==========================================================================
+   7) 이벤트 바인딩 (동적으로 생성된 요소이므로 위임 방식 사용)
+   ========================================================================== */
+$(document).on("input", '[data-role="text-input"]', function(){
+  const id = $(this).data("id");
+  setItemState(id, $(this).val().trim().length > 0);
+});
+
+$(document).on("change", '[data-role="file-input"]', function(){
+  const id = $(this).data("id");
+  const file = this.files[0];
+  $(`[data-role="file-name"][data-id="${id}"]`).text(file ? file.name : "선택된 파일 없음");
+  setItemState(id, !!file);
+});
+
+$(document).on("change", '[data-role="radio-input"]', function(){
+  const id = $(this).data("id");
+  setItemState(id, true);
+});
+
+$(document).on("change", '[data-role="checkbox-input"]', function(){
+  const id = $(this).data("id");
+  setItemState(id, $(this).is(":checked"));
+});
+
+$(document).on("input", '[data-role="number-input"]', function(){
+  const id = $(this).data("id");
+  const item = checklistData.find(d => d.id === id);
+  const cfg = item.config || {};
+  const raw = $(this).val();
+
+  const $verdict = $(`[data-role="verdict"][data-id="${id}"]`);
+
+  if (raw === ""){
+    $verdict.text("미입력").attr("class", "verdict pending");
+    setItemState(id, false, null);
+    return;
+  }
+
+  const result = evaluateCondition(raw, cfg.operator, cfg.threshold);
+  if (result === null){
+    $verdict.text("미입력").attr("class", "verdict pending");
+    setItemState(id, false, null);
+  } else if (result){
+    $verdict.text("적합").attr("class", "verdict pass");
+    setItemState(id, true, "pass");
+  } else {
+    $verdict.text("부적합").attr("class", "verdict fail");
+    setItemState(id, true, "fail");
+  }
+});
+
+/* ==========================================================================
+   8) 제출
+   ========================================================================== */
+$("#submitBtn").on("click", function(){
+  const missing = Object.keys(answerState).filter(id =>
+    answerState[id].required && !answerState[id].answered
+  );
+
+  if (missing.length > 0){
+    alert(`필수 항목 ${missing.length}건이 입력되지 않았습니다.\n(문항 번호: ${missing.join(", ")})`);
+    return;
+  }
+
+  const failItems = Object.keys(answerState).filter(id => answerState[id].verdict === "fail");
+  const msg = failItems.length > 0
+    ? `점검이 완료되었습니다. 단, 부적합 판정 항목이 ${failItems.length}건 있습니다.\n(문항 번호: ${failItems.join(", ")})`
+    : "점검이 완료되었습니다. 모든 항목이 적합합니다.";
+
+  alert(msg);
+  // 실제 환경에서는 여기서 $.ajax(...)로 서버에 결과를 전송
+});
+
+/* ==========================================================================
+   9) 초기 렌더링
+   ========================================================================== */
+$(function(){
+  renderChecklist(checklistData);
+});
+</script>
+
+</body>
+</html>
