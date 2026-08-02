@@ -9,6 +9,9 @@
   --cg-bar: #2563eb;
   --cg-bar-soft: rgba(37, 99, 235, 0.18);
   --cg-success: #10b981;
+  --cg-danger: #ef4444;
+  --cg-dependency-line: #94a3b8;
+  --cg-dependency-line-active: #2563eb;
 }
 
 .custom-gantt {
@@ -169,7 +172,8 @@
 
 .custom-gantt.is-sidebar-collapsed .cg-header-title,
 .custom-gantt.is-sidebar-collapsed .cg-row-label .cg-toggle,
-.custom-gantt.is-sidebar-collapsed .cg-row-label .cg-label-text {
+.custom-gantt.is-sidebar-collapsed .cg-row-label .cg-label-text,
+.custom-gantt.is-sidebar-collapsed .cg-row-label .cg-lt-badge {
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
@@ -234,6 +238,8 @@
 }
 
 .cg-label-text {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -262,6 +268,25 @@
 
 .cg-row-label.is-collapsed .cg-toggle::before {
   content: "+";
+}
+
+.cg-lt-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.cg-lt-badge.is-under {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
+.cg-lt-badge.is-over {
+  background: rgba(239, 68, 68, 0.14);
+  color: #b91c1c;
 }
 
 .cg-timeline {
@@ -382,6 +407,30 @@
   box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.18);
 }
 
+.cg-lt-marker {
+  position: absolute;
+  top: 3px;
+  z-index: 3;
+  width: 3px;
+  height: 36px;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    180deg,
+    var(--cg-lt-marker-color) 0,
+    var(--cg-lt-marker-color) 9px,
+    transparent 9px,
+    transparent 13px
+  );
+}
+
+.cg-lt-marker.is-under {
+  --cg-lt-marker-color: var(--cg-success);
+}
+
+.cg-lt-marker.is-over {
+  --cg-lt-marker-color: var(--cg-danger);
+}
+
 .cg-summary-lead {
   position: absolute;
   z-index: 1;
@@ -401,6 +450,39 @@
 .cg-task-bar.is-summary {
   background: rgba(15, 23, 42, 0.18);
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.28);
+}
+
+.custom-gantt.has-dependency-lines .cg-task-bar {
+  cursor: pointer;
+}
+
+.cg-task-bar.is-dependency-active {
+  box-shadow: inset 0 0 0 2px var(--cg-dependency-line-active);
+}
+
+.cg-dependency-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.cg-dependency-line {
+  fill: none;
+  stroke: var(--cg-dependency-line);
+  stroke-width: 1.5;
+  transition: stroke 120ms ease, opacity 120ms ease, stroke-width 120ms ease;
+}
+
+.cg-dependency-line.is-highlighted {
+  stroke: var(--cg-dependency-line-active);
+  stroke-width: 2;
+}
+
+.cg-dependency-line.is-dimmed {
+  opacity: 0.18;
 }
 
 .cg-task-progress {

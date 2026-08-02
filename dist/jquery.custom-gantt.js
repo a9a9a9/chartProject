@@ -34,13 +34,17 @@
     colorTheme: 'default',
     ignoreDataColors: false,
     colorRenderer: null,
-    barLabelRenderer: null
+    barLabelRenderer: null,
+    showDpndLines: false,
+    leadTimeField: 'expectDays',
+    showLeadTimeLine: false
   };
 
   function CustomGantt(element, options) {
     this.$element = $(element);
     this.eventNamespace = '.' + pluginName + instanceCount;
     this.modalEventNamespace = '.modal' + pluginName + instanceCount;
+    this.dependencyArrowId = 'cg-dependency-arrow-' + instanceCount;
     instanceCount += 1;
     this.options = $.extend({}, defaults, options);
     this.rows = [];
@@ -51,6 +55,7 @@
     this.pendingScrollPosition = null;
     this.sidebarCollapsed = false;
     this.enteringRowIds = {};
+    this.activeDependencyRowId = null;
     this.init();
   }
 
@@ -134,7 +139,8 @@
     this.$element
       .empty()
       .addClass('custom-gantt')
-      .toggleClass('is-sidebar-collapsed', this.sidebarCollapsed);
+      .toggleClass('is-sidebar-collapsed', this.sidebarCollapsed)
+      .toggleClass('has-dependency-lines', !!opts.showDpndLines);
 
     if (!this.rows.length || !this.units.length) {
       this.$element.append($('<div class="cg-empty">').text('표시할 일정 데이터가 없습니다.'));
@@ -176,13 +182,25 @@
         $label.append($('<button class="cg-toggle" type="button" aria-label="분류 접기/펼치기">'));
       }
 
-      $sidebar.append(
-        $label.append($('<span class="cg-label-text">').text(row.label))
-      );
+      $label.append($('<span class="cg-label-text">').text(row.label));
+
+      var $ltBadge = buildLeadTimeBadge(row, opts);
+
+      if ($ltBadge) {
+        $label.append($ltBadge);
+      }
+
+      $sidebar.append($label);
     }, this);
 
+    var $rows = this.renderRows(gridTemplate, visibleRows, enteringRowIds);
+
     $timeline.append(this.renderUnits(gridTemplate));
-    $timeline.append(this.renderRows(gridTemplate, visibleRows, enteringRowIds));
+    $timeline.append($rows);
+
+    if (opts.showDpndLines) {
+      this.appendDependencyLines($rows, visibleRows, unitWidth);
+    }
 
     if (opts.showToday) {
       appendTodayLine($timeline, this.units, unitWidth);
@@ -195,6 +213,7 @@
     this.bindDragScroll();
     this.bindTaskContextMenu();
     this.bindTaskHoverBar();
+    this.bindDependencyLineSelection();
     this.restoreScrollPosition();
     this.applyInitialCenterScroll();
     this.enteringRowIds = {};
@@ -252,6 +271,10 @@
           $gridRow.append(renderSummaryLead(row, self.units, unitWidth));
         }
         $gridRow.append(renderTaskBar(row, self.units, unitWidth, opts));
+
+        if (opts.showLeadTimeLine) {
+          $gridRow.append(renderLeadTimeMarker(row, self.units, unitWidth, opts));
+        }
       }
 
       $rows.append($gridRow);
@@ -551,6 +574,67 @@
     $('.cg-task-tooltip').remove();
   };
 
+  CustomGantt.prototype.appendDependencyLines = function ($rows, visibleRows, unitWidth) {
+    var opts = this.options;
+    var rowIndexMap = {};
+
+    visibleRows.forEach(function (row, index) {
+      rowIndexMap[row.id] = index;
+    });
+
+    var edges = buildDependencyEdges(visibleRows);
+    var $svg = renderDependencyLines(edges, rowIndexMap, visibleRows.length, this.units, unitWidth, opts.rowHeight, this.dependencyArrowId);
+
+    $rows.append($svg);
+  };
+
+  CustomGantt.prototype.bindDependencyLineSelection = function () {
+    var self = this;
+
+    if (!this.options.showDpndLines) {
+      return;
+    }
+
+    this.$element.find('.cg-task-bar').on('click', function (event) {
+      event.stopPropagation();
+      var row = $(this).data('taskRow');
+
+      self.activeDependencyRowId = self.activeDependencyRowId === row.id ? null : row.id;
+      self.applyDependencySelection();
+    });
+
+    this.applyDependencySelection();
+  };
+
+  CustomGantt.prototype.applyDependencySelection = function () {
+    var activeRowId = this.activeDependencyRowId;
+    var defaultArrowUrl = 'url(#' + this.dependencyArrowId + ')';
+    var activeArrowUrl = 'url(#' + this.dependencyArrowId + '-active)';
+    var $lines = this.$element.find('.cg-dependency-line');
+    var $bars = this.$element.find('.cg-task-bar');
+
+    $bars.removeClass('is-dependency-active');
+
+    if (!activeRowId) {
+      $lines.removeClass('is-dimmed is-highlighted').attr('marker-end', defaultArrowUrl);
+      return;
+    }
+
+    $lines.each(function () {
+      var $line = $(this);
+      var isConnected = $line.attr('data-from-row') === activeRowId || $line.attr('data-to-row') === activeRowId;
+
+      $line
+        .toggleClass('is-highlighted', isConnected)
+        .toggleClass('is-dimmed', !isConnected)
+        .attr('marker-end', isConnected ? activeArrowUrl : defaultArrowUrl);
+    });
+
+    $bars.filter(function () {
+      return $(this).data('taskRow').id === activeRowId;
+    }).addClass('is-dependency-active');
+  };
+
   CustomGantt.prototype.applyInitialCenterScroll = function () {
     var self = this;
     var initialPosition = getInitialCenterPosition(this.options.initialCenterDate, this.units);
@@ -720,8 +804,39 @@
     row.hasOwnProgress = hasOwnProgress;
     row.progress = hasOwnProgress ? clamp(data.progress, 0, 100) : row.progress;
     row.color = resolveRowColor(data, row, options, palette, colorIndex);
+    row.dependencies = Array.isArray(data.dependencies) ? data.dependencies : [];
 
     return row;
+  }
+
+  function getDependencyKey(row) {
+    if (row.source && row.source.id !== undefined && row.source.id !== null) {
+      return row.source.id;
+    }
+
+    return row.id;
+  }
+
+  function buildDependencyEdges(visibleRows) {
+    var lookup = {};
+
+    visibleRows.forEach(function (row) {
+      lookup[getDependencyKey(row)] = row;
+    });
+
+    var edges = [];
+
+    visibleRows.forEach(function (row) {
+      (row.dependencies || []).forEach(function (dependencyId) {
+        var fromRow = lookup[dependencyId];
+
+        if (fromRow && fromRow !== row && fromRow.start && fromRow.end && row.start && row.end) {
+          edges.push({ from: fromRow, to: row });
+        }
+      });
+    });
+
+    return edges;
   }
 
   function resolveRowColor(data, row, options, palette, colorIndex) {
@@ -750,6 +865,32 @@
       progress: row.progress,
       source: data
     });
+  }
+
+  function getLeadTimeValue(row, options) {
+    var field = options.leadTimeField || 'expectDays';
+    var raw = row.source && row.source[field];
+    var value = Number(raw);
+
+    return raw !== undefined && raw !== null && !Number.isNaN(value) ? value : null;
+  }
+
+  function buildLeadTimeBadge(row, options) {
+    var leadTime = getLeadTimeValue(row, options);
+
+    if (leadTime === null || !row.start || !row.end) {
+      return null;
+    }
+
+    var actualDays = diffDays(row.start, row.end) + 1;
+    var diff = actualDays - leadTime;
+    var isOver = diff > 0;
+
+    return $('<span class="cg-lt-badge">')
+      .toggleClass('is-over', isOver)
+      .toggleClass('is-under', !isOver)
+      .attr('title', '리드타임(L/T) ' + leadTime + '일 기준 ' + (isOver ? Math.abs(diff) + '일 초과' : Math.abs(diff) + '일 여유'))
+      .text('L/T ' + (diff > 0 ? '+' : '') + diff);
   }
 
   function getVisibleRows(rows, collapsed) {
@@ -1010,6 +1151,30 @@
     return String(label);
   }
 
+  function renderLeadTimeMarker(row, units, unitWidth, options) {
+    var leadTime = getLeadTimeValue(row, options);
+
+    if (leadTime === null) {
+      return $();
+    }
+
+    var boundaryDate = addDays(row.start, leadTime - 1);
+    var boundaryMetrics = getTaskBarMetrics({ start: row.start, end: boundaryDate }, units, unitWidth);
+
+    if (!boundaryMetrics) {
+      return $();
+    }
+
+    var actualDays = diffDays(row.start, row.end) + 1;
+    var isOver = actualDays > leadTime;
+
+    return $('<div class="cg-lt-marker">')
+      .toggleClass('is-over', isOver)
+      .toggleClass('is-under', !isOver)
+      .css('left', boundaryMetrics.left + boundaryMetrics.width)
+      .attr('title', 'L/T 기준(' + leadTime + '일): ' + formatDate(boundaryDate, options.locale) + '까지');
+  }
+
   function renderSummaryLead(row, units, unitWidth) {
     var metrics = getTaskBarMetrics(row, units, unitWidth);
 
@@ -1021,6 +1186,91 @@
       left: 3,
       width: metrics.left - 6
     });
+  }
+
+  function createSvgElement(tag) {
+    return document.createElementNS('http://www.w3.org/2000/svg', tag);
+  }
+
+  function createDependencyArrowMarker(id, color) {
+    var marker = createSvgElement('marker');
+    var arrow = createSvgElement('path');
+
+    marker.setAttribute('id', id);
+    marker.setAttribute('viewBox', '0 0 8 8');
+    marker.setAttribute('refX', '7');
+    marker.setAttribute('refY', '4');
+    marker.setAttribute('markerWidth', '5');
+    marker.setAttribute('markerHeight', '5');
+    marker.setAttribute('orient', 'auto-start-reverse');
+
+    arrow.setAttribute('d', 'M0,0 L8,4 L0,8 Z');
+    arrow.setAttribute('fill', color);
+
+    marker.appendChild(arrow);
+    return marker;
+  }
+
+  function buildDependencyLinePath(fromX, fromY, toX, toY, rowHeight) {
+    var lead = 14;
+    var midX = fromX + lead;
+
+    if (toX - lead >= midX) {
+      return ['M', fromX, fromY, 'L', midX, fromY, 'L', midX, toY, 'L', toX, toY].join(' ');
+    }
+
+    var detourX = toX - lead;
+    var detourY = fromY <= toY ? fromY + (rowHeight / 2) : fromY - (rowHeight / 2);
+
+    return [
+      'M', fromX, fromY,
+      'L', midX, fromY,
+      'L', midX, detourY,
+      'L', detourX, detourY,
+      'L', detourX, toY,
+      'L', toX, toY
+    ].join(' ');
+  }
+
+  function renderDependencyLines(edges, rowIndexMap, rowCount, units, unitWidth, rowHeight, arrowId) {
+    if (!edges.length) {
+      return $();
+    }
+
+    var svg = createSvgElement('svg');
+    var defs = createSvgElement('defs');
+
+    svg.setAttribute('class', 'cg-dependency-svg');
+    svg.setAttribute('width', units.length * unitWidth);
+    svg.setAttribute('height', rowCount * rowHeight);
+
+    defs.appendChild(createDependencyArrowMarker(arrowId, '#94a3b8'));
+    defs.appendChild(createDependencyArrowMarker(arrowId + '-active', '#2563eb'));
+    svg.appendChild(defs);
+
+    edges.forEach(function (edge) {
+      var fromMetrics = getTaskBarMetrics(edge.from, units, unitWidth);
+      var toMetrics = getTaskBarMetrics(edge.to, units, unitWidth);
+
+      if (!fromMetrics || !toMetrics) {
+        return;
+      }
+
+      var fromY = (rowIndexMap[edge.from.id] * rowHeight) + (rowHeight / 2);
+      var toY = (rowIndexMap[edge.to.id] * rowHeight) + (rowHeight / 2);
+      var fromX = fromMetrics.left + fromMetrics.width;
+      var toX = toMetrics.left;
+      var path = createSvgElement('path');
+
+      path.setAttribute('class', 'cg-dependency-line');
+      path.setAttribute('data-from-row', edge.from.id);
+      path.setAttribute('data-to-row', edge.to.id);
+      path.setAttribute('marker-end', 'url(#' + arrowId + ')');
+      path.setAttribute('d', buildDependencyLinePath(fromX, fromY, toX, toY, rowHeight));
+      svg.appendChild(path);
+    });
+
+    return $(svg);
   }
 
   function getTaskBarMetrics(row, units, unitWidth) {
