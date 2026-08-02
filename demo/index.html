@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>jQuery Custom Gantt Demo</title>
-    <link rel="stylesheet" href="../dist/jquery.custom-gantt.css?v=20260528-5" />
+    <link rel="stylesheet" href="../dist/jquery.custom-gantt.css?v=20260803-5" />
     <style>
       html,
       body {
@@ -125,6 +125,123 @@
         content: "+";
       }
 
+      .demo-legend-wrap {
+        position: relative;
+      }
+
+      .demo-legend-trigger {
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: 16px;
+        font-style: italic;
+        font-weight: 700;
+      }
+
+      .demo-legend-trigger::before {
+        content: none;
+      }
+
+      .demo-legend-panel {
+        position: absolute;
+        top: calc(100% + 10px);
+        right: 0;
+        z-index: 2000;
+        width: 300px;
+        padding: 16px;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        background: #ffffff;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+        opacity: 0;
+        transform: translateY(-4px);
+        transition: opacity 120ms ease, transform 120ms ease;
+        pointer-events: none;
+      }
+
+      .demo-legend-wrap:hover .demo-legend-panel,
+      .demo-legend-trigger:focus-visible + .demo-legend-panel {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+
+      .demo-legend-title {
+        margin: 0 0 10px;
+        color: #0f172a;
+        font-size: 14px;
+        font-weight: 800;
+      }
+
+      .demo-legend-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .demo-legend-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .demo-legend-swatch {
+        flex: 0 0 auto;
+        width: 16px;
+        height: 16px;
+        margin-top: 1px;
+        border-radius: 4px;
+      }
+
+      .demo-legend-swatch.is-dependency {
+        position: relative;
+        background: transparent;
+      }
+
+      .demo-legend-swatch.is-dependency::before {
+        position: absolute;
+        top: 7px;
+        left: 0;
+        width: 16px;
+        height: 2px;
+        background: #2563eb;
+        content: "";
+      }
+
+      .demo-legend-swatch.is-today {
+        background: #ef4444;
+        width: 2px;
+        margin-left: 7px;
+      }
+
+      .demo-legend-swatch.is-lt-over {
+        background: rgba(239, 68, 68, 0.16);
+        box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.4);
+      }
+
+      .demo-legend-swatch.is-lt-under {
+        background: rgba(16, 185, 129, 0.16);
+        box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.4);
+      }
+
+      .demo-legend-swatch.is-bar {
+        background: rgba(37, 99, 235, 0.18);
+        box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.3);
+      }
+
+      .demo-legend-swatch.is-lt-line {
+        width: 2px;
+        margin-left: 7px;
+        background: #10b981;
+      }
+
+      .demo-legend-text strong {
+        color: #0f172a;
+      }
+
       #gantt {
         flex: 1 1 auto;
         min-height: 0;
@@ -166,6 +283,44 @@
             <button class="demo-button" type="button" data-expand-level="small">소분류</button>
           </div>
           <button style="display: none;" class="demo-icon-button is-collapsed" type="button" id="toggleAllRows" aria-label="전체 펼치기" title="전체 펼치기"></button>
+          <div class="demo-toggle" aria-label="선행 관계선">
+            <button class="demo-button" type="button" id="toggleDependencyLines">선행선 표시</button>
+          </div>
+          <div class="demo-toggle" aria-label="리드타임 기준선">
+            <button class="demo-button" type="button" id="toggleLeadTimeLine">L/T 기준선 표시</button>
+          </div>
+          <div class="demo-legend-wrap">
+            <button class="demo-icon-button demo-legend-trigger" type="button" id="legendTrigger" aria-label="차트 사용법 보기">i</button>
+            <div class="demo-legend-panel" role="tooltip">
+              <p class="demo-legend-title">차트 보는 법</p>
+              <ul class="demo-legend-list">
+                <li class="demo-legend-item">
+                  <span class="demo-legend-swatch is-bar"></span>
+                  <span class="demo-legend-text"><strong>진행 막대</strong> — 채워진 만큼 진행률(%)을 의미해요.</span>
+                </li>
+                <li class="demo-legend-item">
+                  <span class="demo-legend-swatch is-today"></span>
+                  <span class="demo-legend-text"><strong>빨간 세로선</strong> — 오늘 날짜 위치예요.</span>
+                </li>
+                <li class="demo-legend-item">
+                  <span class="demo-legend-swatch is-dependency"></span>
+                  <span class="demo-legend-text"><strong>화살표 선</strong> — 작업 간 선행/후행 관계예요. "선행선 표시"를 켜면 보이고, 막대를 클릭하면 연결된 선만 강조돼요.</span>
+                </li>
+                <li class="demo-legend-item">
+                  <span class="demo-legend-swatch is-lt-over"></span>
+                  <span class="demo-legend-text"><strong>L/T +n (빨강)</strong> — 리드타임(예상 소요일)보다 n일 초과됐어요.</span>
+                </li>
+                <li class="demo-legend-item">
+                  <span class="demo-legend-swatch is-lt-under"></span>
+                  <span class="demo-legend-text"><strong>L/T -n (초록)</strong> — 리드타임보다 n일 여유가 있어요.</span>
+                </li>
+                <li class="demo-legend-item">
+                  <span class="demo-legend-swatch is-lt-line"></span>
+                  <span class="demo-legend-text"><strong>세로 기준선</strong> — 시작일 + 리드타임 위치예요. "L/T 기준선 표시"를 켜면 보이고, 막대가 선을 넘으면 빨강, 안 넘으면 초록이에요.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -173,7 +328,7 @@
     </main>
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="../dist/jquery.custom-gantt.js?v=20260528-9"></script>
+    <script src="../dist/jquery.custom-gantt.js?v=20260803-2"></script>
     <script>
       $(function () {
         var isAllCollapsed = true;
@@ -190,6 +345,8 @@
           excludeWeekends: true,
           colorTheme: 'default',
           ignoreDataColors: false,
+          showDpndLines: false,
+          showLeadTimeLine: false,
           colorRenderer: function (item) {
             /* if (item.status === 'done' || item.status === 'FINISHED') {
               return 'green';
@@ -295,6 +452,26 @@
             .toggleClass('is-collapsed', isAllCollapsed)
             .attr('aria-label', isAllCollapsed ? '전체 펼치기' : '전체 접기')
             .attr('title', isAllCollapsed ? '전체 펼치기' : '전체 접기');
+        });
+
+        $('#toggleDependencyLines').on('click', function () {
+          var isActive = !$(this).hasClass('is-active');
+
+          $(this).toggleClass('is-active', isActive);
+          baseOptions.showDpndLines = isActive;
+          $('#gantt').customGantt({
+            showDpndLines: isActive
+          });
+        });
+
+        $('#toggleLeadTimeLine').on('click', function () {
+          var isActive = !$(this).hasClass('is-active');
+
+          $(this).toggleClass('is-active', isActive);
+          baseOptions.showLeadTimeLine = isActive;
+          $('#gantt').customGantt({
+            showLeadTimeLine: isActive
+          });
         });
 
         $('#toggleAllRows').on('click', function () {
