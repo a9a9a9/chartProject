@@ -36,6 +36,7 @@
     colorRenderer: null,
     barLabelRenderer: null,
     showDpndLines: false,
+    dpndLeadWidth: 30,
     leadTimeField: 'expectDays',
     showLeadTimeLine: false
   };
@@ -56,14 +57,27 @@
     this.sidebarCollapsed = false;
     this.enteringRowIds = {};
     this.activeDependencyRowId = null;
+    this.backwardDependencies = [];
+    this.hasBackwardDependency = false;
     this.init();
   }
 
   CustomGantt.prototype.init = function () {
     this.rows = flattenRows(this.options.data, this.options);
+    this.backwardDependencies = collectBackwardDependencies(this.rows);
+    this.hasBackwardDependency = this.backwardDependencies.length > 0;
     this.applyInitialCollapsedState();
     this.units = buildUnits(this.options, this.rows);
     this.render();
+  };
+
+  // 역방향 선이 있을 때만 첫 셀을 넓혀 선이 왼쪽으로 빠져나갈 여유를 만든다.
+  CustomGantt.prototype.getDependencyLead = function () {
+    if (!this.options.showDpndLines || !this.hasBackwardDependency) {
+      return 0;
+    }
+
+    return Math.max(Number(this.options.dpndLeadWidth) || 0, 0);
   };
 
   CustomGantt.prototype.update = function (options) {
@@ -140,7 +154,8 @@
       .empty()
       .addClass('custom-gantt')
       .toggleClass('is-sidebar-collapsed', this.sidebarCollapsed)
-      .toggleClass('has-dependency-lines', !!opts.showDpndLines);
+      .toggleClass('has-dependency-lines', !!opts.showDpndLines)
+      .toggleClass('has-backward-dependency', this.hasBackwardDependency);
 
     if (!this.rows.length || !this.units.length) {
       this.$element.append($('<div class="cg-empty">').text('표시할 일정 데이터가 없습니다.'));
@@ -157,7 +172,7 @@
     var $board = $('<div class="cg-board">');
     var $sidebar = $('<div class="cg-sidebar">');
     var $timeline = $('<div class="cg-timeline">');
-    var gridTemplate = 'repeat(' + this.units.length + ', ' + unitWidth + 'px)';
+    var gridTemplate = buildGridTemplate(this.units.length, unitWidth, this.getDependencyLead());
 
     $toolbar.append($title, $range);
     $sidebar.append(
@@ -203,7 +218,7 @@
     }
 
     if (opts.showToday) {
-      appendTodayLine($timeline, this.units, unitWidth);
+      appendTodayLine($timeline, this.units, unitWidth, this.getDependencyLead());
     }
 
     $board.append($sidebar, $timeline);
@@ -249,6 +264,7 @@
     var self = this;
     var opts = this.options;
     var unitWidth = getUnitWidth(opts);
+    var lead = this.getDependencyLead();
     var $rows = $('<div class="cg-rows">');
 
     visibleRows.forEach(function (row) {
@@ -268,12 +284,12 @@
 
       if (row.start && row.end) {
         if (row.isSummary) {
-          $gridRow.append(renderSummaryLead(row, self.units, unitWidth));
+          $gridRow.append(renderSummaryLead(row, self.units, unitWidth, lead));
         }
-        $gridRow.append(renderTaskBar(row, self.units, unitWidth, opts));
+        $gridRow.append(renderTaskBar(row, self.units, unitWidth, opts, lead));
 
         if (opts.showLeadTimeLine) {
-          $gridRow.append(renderLeadTimeMarker(row, self.units, unitWidth, opts));
+          $gridRow.append(renderLeadTimeMarker(row, self.units, unitWidth, opts, lead));
         }
       }
 
@@ -583,7 +599,7 @@
     });
 
     var edges = buildDependencyEdges(visibleRows);
-    var $svg = renderDependencyLines(edges, rowIndexMap, visibleRows.length, this.units, unitWidth, opts.rowHeight, this.dependencyArrowId);
+    var $svg = renderDependencyLines(edges, rowIndexMap, visibleRows.length, this.units, unitWidth, opts.rowHeight, this.dependencyArrowId, this.getDependencyLead());
 
     $rows.append($svg);
   };
@@ -660,15 +676,17 @@
     var unitWidth = getUnitWidth(this.options);
     var sidebarWidth = this.$element.find('.cg-sidebar').outerWidth() || 0;
     var viewportWidth = Math.max($scroll.innerWidth() - sidebarWidth, 0);
+    var lead = this.getDependencyLead();
     var targetOffset = dateToOffset(date, this.units, unitWidth);
     var scrollLeft;
 
     if (align === 'start') {
+      // 넓어진 첫 셀을 그대로 보여 줘야 역방향 선이 잘리지 않는다.
       scrollLeft = targetOffset;
     } else if (align === 'end') {
-      scrollLeft = targetOffset - viewportWidth + unitWidth;
+      scrollLeft = lead + targetOffset - viewportWidth + unitWidth;
     } else {
-      scrollLeft = targetOffset - (viewportWidth / 2);
+      scrollLeft = lead + targetOffset - (viewportWidth / 2);
     }
 
     $scroll.scrollLeft(Math.max(scrollLeft, 0));
@@ -837,6 +855,39 @@
     });
 
     return edges;
+  }
+
+  function collectBackwardDependencies(rows) {
+    var lookup = {};
+    var backward = [];
+
+    rows.forEach(function (row) {
+      lookup[getDependencyKey(row)] = row;
+    });
+
+    rows.forEach(function (row) {
+      (row.dependencies || []).forEach(function (dependencyId) {
+        var fromRow = lookup[dependencyId];
+
+        if (!fromRow || fromRow === row || !fromRow.end || !row.start) {
+          return;
+        }
+
+        if (row.start >= fromRow.end) {
+          return;
+        }
+
+        backward.push({
+          fromId: dependencyId,
+          toId: getDependencyKey(row),
+          fromLabel: fromRow.label,
+          toLabel: row.label,
+          overlapDays: diffDays(row.start, fromRow.end)
+        });
+      });
+    });
+
+    return backward;
   }
 
   function resolveRowColor(data, row, options, palette, colorIndex) {
@@ -1100,8 +1151,8 @@
     return units;
   }
 
-  function renderTaskBar(row, units, unitWidth, options) {
-    var metrics = getTaskBarMetrics(row, units, unitWidth);
+  function renderTaskBar(row, units, unitWidth, options, lead) {
+    var metrics = getTaskBarMetrics(row, units, unitWidth, lead);
 
     if (!metrics) {
       return $();
@@ -1151,7 +1202,7 @@
     return String(label);
   }
 
-  function renderLeadTimeMarker(row, units, unitWidth, options) {
+  function renderLeadTimeMarker(row, units, unitWidth, options, lead) {
     var leadTime = getLeadTimeValue(row, options);
 
     if (leadTime === null) {
@@ -1159,7 +1210,7 @@
     }
 
     var boundaryDate = addDays(row.start, leadTime - 1);
-    var boundaryMetrics = getTaskBarMetrics({ start: row.start, end: boundaryDate }, units, unitWidth);
+    var boundaryMetrics = getTaskBarMetrics({ start: row.start, end: boundaryDate }, units, unitWidth, lead);
 
     if (!boundaryMetrics) {
       return $();
@@ -1175,16 +1226,32 @@
       .attr('title', 'L/T 기준(' + leadTime + '일): ' + formatDate(boundaryDate, options.locale) + '까지');
   }
 
-  function renderSummaryLead(row, units, unitWidth) {
-    var metrics = getTaskBarMetrics(row, units, unitWidth);
+  // 첫 컬럼만 lead 만큼 넓히고 나머지는 unitWidth 그대로 둔다.
+  function buildGridTemplate(unitCount, unitWidth, lead) {
+    if (!lead || unitCount < 1) {
+      return 'repeat(' + unitCount + ', ' + unitWidth + 'px)';
+    }
 
-    if (!metrics || metrics.left <= 12) {
+    var firstColumn = (unitWidth + lead) + 'px';
+
+    if (unitCount === 1) {
+      return firstColumn;
+    }
+
+    return firstColumn + ' repeat(' + (unitCount - 1) + ', ' + unitWidth + 'px)';
+  }
+
+  function renderSummaryLead(row, units, unitWidth, lead) {
+    var metrics = getTaskBarMetrics(row, units, unitWidth, lead);
+    var origin = (lead || 0) + 3;
+
+    if (!metrics || metrics.left - origin <= 9) {
       return $();
     }
 
     return $('<div class="cg-summary-lead">').css({
-      left: 3,
-      width: metrics.left - 6
+      left: origin,
+      width: metrics.left - origin - 3
     });
   }
 
@@ -1232,7 +1299,7 @@
     ].join(' ');
   }
 
-  function renderDependencyLines(edges, rowIndexMap, rowCount, units, unitWidth, rowHeight, arrowId) {
+  function renderDependencyLines(edges, rowIndexMap, rowCount, units, unitWidth, rowHeight, arrowId, lead) {
     if (!edges.length) {
       return $();
     }
@@ -1241,7 +1308,7 @@
     var defs = createSvgElement('defs');
 
     svg.setAttribute('class', 'cg-dependency-svg');
-    svg.setAttribute('width', units.length * unitWidth);
+    svg.setAttribute('width', (lead || 0) + (units.length * unitWidth));
     svg.setAttribute('height', rowCount * rowHeight);
 
     defs.appendChild(createDependencyArrowMarker(arrowId, '#94a3b8'));
@@ -1249,8 +1316,8 @@
     svg.appendChild(defs);
 
     edges.forEach(function (edge) {
-      var fromMetrics = getTaskBarMetrics(edge.from, units, unitWidth);
-      var toMetrics = getTaskBarMetrics(edge.to, units, unitWidth);
+      var fromMetrics = getTaskBarMetrics(edge.from, units, unitWidth, lead);
+      var toMetrics = getTaskBarMetrics(edge.to, units, unitWidth, lead);
 
       if (!fromMetrics || !toMetrics) {
         return;
@@ -1273,7 +1340,7 @@
     return $(svg);
   }
 
-  function getTaskBarMetrics(row, units, unitWidth) {
+  function getTaskBarMetrics(row, units, unitWidth, lead) {
     var start = stripTime(row.start);
     var end = stripTime(row.end);
 
@@ -1281,8 +1348,8 @@
       return null;
     }
 
-    var startOffset = dateToOffset(start, units, unitWidth);
-    var endOffset = dateToOffset(addDays(end, 1), units, unitWidth);
+    var startOffset = (lead || 0) + dateToOffset(start, units, unitWidth);
+    var endOffset = (lead || 0) + dateToOffset(addDays(end, 1), units, unitWidth);
 
     return {
       left: startOffset + 3,
@@ -1290,7 +1357,7 @@
     };
   }
 
-  function appendTodayLine($timeline, units, unitWidth) {
+  function appendTodayLine($timeline, units, unitWidth, lead) {
     var today = stripTime(new Date());
     var start = stripTime(units[0].start);
     var end = stripTime(units[units.length - 1].end);
@@ -1300,7 +1367,7 @@
     }
 
     $timeline.append(
-      $('<div class="cg-today-line">').css('left', dateToOffset(today, units, unitWidth))
+      $('<div class="cg-today-line">').css('left', (lead || 0) + dateToOffset(today, units, unitWidth))
     );
   }
 

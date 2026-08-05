@@ -284,7 +284,7 @@
           </div>
           <button style="display: none;" class="demo-icon-button is-collapsed" type="button" id="toggleAllRows" aria-label="전체 펼치기" title="전체 펼치기"></button>
           <div class="demo-toggle" aria-label="선행 관계선">
-            <button class="demo-button" type="button" id="toggleDependencyLines">선행선 표시</button>
+            <button class="demo-button is-active" type="button" id="toggleDependencyLines">선행선 표시</button>
           </div>
           <div class="demo-toggle" aria-label="리드타임 기준선">
             <button class="demo-button" type="button" id="toggleLeadTimeLine">L/T 기준선 표시</button>
@@ -345,7 +345,7 @@
           excludeWeekends: true,
           colorTheme: 'default',
           ignoreDataColors: false,
-          showDpndLines: false,
+          showDpndLines: true,
           showLeadTimeLine: false,
           colorRenderer: function (item) {
             /* if (item.status === 'done' || item.status === 'FINISHED') {

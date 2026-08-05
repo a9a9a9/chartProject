@@ -201,7 +201,10 @@
       "end": "2026-01-09",
       "expectDays": 3,
       "progress": 100,
-      "color": "#2563eb"
+      "color": "#2563eb",
+      "dependencies": [
+        "L01M02S03"
+      ]
     },
     {
       "mediumId": "L01M01",
