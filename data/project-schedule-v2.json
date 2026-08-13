@@ -1,0 +1,435 @@
+{
+  "largeList": [
+    {
+      "id": "L01",
+      "name": "사전 준비",
+      "type": "large",
+      "status": "PROCESSING",
+      "start": "2026-07-01",
+      "end": "2026-08-14",
+      "expectDays": 45,
+      "progress": 84,
+      "color": "#213448"
+    },
+    {
+      "id": "L02",
+      "name": "개발",
+      "type": "large",
+      "status": "PROCESSING",
+      "start": "2026-08-03",
+      "end": "2026-09-18",
+      "expectDays": 47,
+      "progress": 58,
+      "color": "#547792"
+    },
+    {
+      "id": "L03",
+      "name": "검증 및 배포",
+      "type": "large",
+      "status": "READY",
+      "start": "2026-09-21",
+      "end": "2026-11-06",
+      "expectDays": 47,
+      "progress": 0,
+      "color": "#94a3b8"
+    }
+  ],
+  "mediumList": [
+    {
+      "largeId": "L01",
+      "id": "L01M01",
+      "name": "요건 정의",
+      "type": "medium",
+      "status": "PROCESSING",
+      "start": "2026-07-06",
+      "end": "2026-08-14",
+      "expectDays": 40,
+      "progress": 75,
+      "color": "#2563eb"
+    },
+    {
+      "largeId": "L01",
+      "id": "L01M02",
+      "name": "아키텍처 설계",
+      "type": "medium",
+      "status": "PROCESSING",
+      "start": "2026-07-01",
+      "end": "2026-08-14",
+      "expectDays": 45,
+      "progress": 94,
+      "color": "#0891b2"
+    },
+    {
+      "largeId": "L02",
+      "id": "L02M01",
+      "name": "백엔드 개발",
+      "type": "medium",
+      "status": "PROCESSING",
+      "start": "2026-08-03",
+      "end": "2026-09-04",
+      "expectDays": 33,
+      "progress": 82,
+      "color": "#16a34a"
+    },
+    {
+      "largeId": "L02",
+      "id": "L02M02",
+      "name": "프론트엔드 개발",
+      "type": "medium",
+      "status": "PROCESSING",
+      "start": "2026-08-05",
+      "end": "2026-09-18",
+      "expectDays": 45,
+      "progress": 33,
+      "color": "#7c3aed"
+    },
+    {
+      "largeId": "L03",
+      "id": "L03M01",
+      "name": "테스트",
+      "type": "medium",
+      "status": "READY",
+      "start": "2026-09-21",
+      "end": "2026-10-16",
+      "expectDays": 26,
+      "progress": 0,
+      "color": "#ea580c"
+    },
+    {
+      "largeId": "L03",
+      "id": "L03M02",
+      "name": "배포 및 안정화",
+      "type": "medium",
+      "status": "READY",
+      "start": "2026-10-12",
+      "end": "2026-11-06",
+      "expectDays": 26,
+      "progress": 0,
+      "color": "#dc2626"
+    }
+  ],
+  "smallList": [
+    {
+      "mediumId": "L01M01",
+      "id": "L01M01S01",
+      "name": "킥오프 및 범위 합의",
+      "type": "small",
+      "status": "FINISHED",
+      "start": "2026-07-06",
+      "end": "2026-07-10",
+      "planStart": "2026-07-06",
+      "planEnd": "2026-07-10",
+      "expectDays": 5,
+      "progress": 100,
+      "warning": 130,
+      "delay": 180
+    },
+    {
+      "mediumId": "L01M01",
+      "id": "L01M01S02",
+      "name": "요구사항 수집",
+      "type": "small",
+      "status": "FINISHED",
+      "start": "2026-07-13",
+      "end": "2026-07-24",
+      "planStart": "2026-07-13",
+      "planEnd": "2026-07-24",
+      "expectDays": 10,
+      "progress": 115,
+      "warning": 150,
+      "delay": 200,
+      "dependencies": [
+        "L01M01S01"
+      ]
+    },
+    {
+      "mediumId": "L01M01",
+      "id": "L01M01S03",
+      "name": "현행 시스템 분석",
+      "type": "small",
+      "status": "PROCESSING",
+      "start": "2026-07-20",
+      "end": "",
+      "planStart": "2026-07-20",
+      "planEnd": "2026-08-03",
+      "expectDays": 15,
+      "progress": 160,
+      "warning": 150,
+      "delay": 200,
+      "dependencies": [
+        "L01M01S01"
+      ]
+    },
+    {
+      "mediumId": "L01M01",
+      "id": "L01M01S04",
+      "name": "요건 확정",
+      "type": "small",
+      "status": "READY",
+      "start": "",
+      "end": "",
+      "planStart": "2026-08-03",
+      "planEnd": "2026-08-14",
+      "expectDays": 10,
+      "progress": 0,
+      "warning": 130,
+      "delay": 170,
+      "dependencies": [
+        "L01M01S03"
+      ]
+    },
+    {
+      "mediumId": "L01M02",
+      "id": "L01M02S01",
+      "name": "기술 스택 선정",
+      "type": "small",
+      "status": "FINISHED",
+      "start": "2026-07-27",
+      "end": "2026-08-07",
+      "planStart": "2026-07-27",
+      "planEnd": "2026-08-07",
+      "expectDays": 10,
+      "progress": 100,
+      "warning": 140,
+      "delay": 190
+    },
+    {
+      "mediumId": "L01M02",
+      "id": "L01M02S02",
+      "name": "시스템 구조 설계",
+      "type": "small",
+      "status": "PROCESSING",
+      "start": "2026-08-03",
+      "end": "",
+      "planStart": "2026-08-03",
+      "planEnd": "2026-08-14",
+      "expectDays": 12,
+      "progress": 83,
+      "warning": 150,
+      "delay": 200,
+      "dependencies": [
+        "L01M02S01"
+      ]
+    },
+    {
+      "mediumId": "L01M02",
+      "id": "L01M02S03",
+      "name": "데이터 모델링",
+      "type": "small",
+      "status": "PROCESSING",
+      "start": "2026-07-01",
+      "end": "",
+      "planStart": "2026-07-01",
+      "planEnd": "2026-07-12",
+      "expectDays": 12,
+      "progress": 358,
+      "warning": 150,
+      "delay": 200
+    },
+    {
+      "mediumId": "L02M01",
+      "id": "L02M01S01",
+      "name": "API 설계",
+      "type": "small",
+      "status": "PROCESSING",
+      "start": "2026-08-03",
+      "end": "2026-08-21",
+      "planStart": "2026-08-03",
+      "planEnd": "2026-08-21",
+      "expectDays": 15,
+      "progress": 125,
+      "warning": 160,
+      "delay": 210,
+      "dependencies": [
+        "L01M02S02"
+      ]
+    },
+    {
+      "mediumId": "L02M01",
+      "id": "L02M01S02",
+      "name": "인증/권한 모듈",
+      "type": "small",
+      "status": "PROCESSING",
+      "start": "2026-08-10",
+      "end": "2026-08-28",
+      "planStart": "2026-08-10",
+      "planEnd": "2026-08-28",
+      "expectDays": 15,
+      "progress": 160,
+      "warning": 160,
+      "delay": 210,
+      "dependencies": [
+        "L02M01S01"
+      ]
+    },
+    {
+      "mediumId": "L02M01",
+      "id": "L02M01S03",
+      "name": "배치 처리",
+      "type": "small",
+      "status": "READY",
+      "start": "2026-08-17",
+      "end": "2026-09-04",
+      "planStart": "2026-08-17",
+      "planEnd": "2026-09-04",
+      "expectDays": 15,
+      "progress": 45,
+      "warning": 150,
+      "delay": 200,
+      "dependencies": [
+        "L02M01S01"
+      ]
+    },
+    {
+      "mediumId": "L02M02",
+      "id": "L02M02S01",
+      "name": "공통 컴포넌트",
+      "type": "small",
+      "status": "PROCESSING",
+      "start": "2026-08-05",
+      "end": "2026-08-25",
+      "planStart": "2026-08-05",
+      "planEnd": "2026-08-25",
+      "expectDays": 15,
+      "progress": 200,
+      "warning": 150,
+      "delay": 200,
+      "dependencies": [
+        "L01M02S02"
+      ]
+    },
+    {
+      "mediumId": "L02M02",
+      "id": "L02M02S02",
+      "name": "주요 화면 개발",
+      "type": "small",
+      "status": "READY",
+      "start": "",
+      "end": "",
+      "planStart": "2026-08-24",
+      "planEnd": "2026-09-18",
+      "expectDays": 20,
+      "progress": 0,
+      "warning": 150,
+      "delay": 200,
+      "dependencies": [
+        "L02M02S01"
+      ]
+    },
+    {
+      "mediumId": "L02M02",
+      "id": "L02M02S03",
+      "name": "반응형 대응",
+      "type": "small",
+      "status": "READY",
+      "start": "2026-09-07",
+      "end": "2026-09-18",
+      "planStart": "2026-09-07",
+      "planEnd": "2026-09-18",
+      "expectDays": 10,
+      "progress": 0,
+      "warning": 150,
+      "delay": 200,
+      "dependencies": [
+        "L02M02S01"
+      ],
+      "afterDependencies": [
+        "L02M02S02"
+      ]
+    },
+    {
+      "mediumId": "L03M01",
+      "id": "L03M01S01",
+      "name": "통합 테스트",
+      "type": "small",
+      "status": "READY",
+      "start": "",
+      "end": "",
+      "planStart": "2026-09-21",
+      "planEnd": "2026-10-09",
+      "expectDays": 15,
+      "progress": 0,
+      "warning": 140,
+      "delay": 190,
+      "dependencies": [
+        "L02M01S03",
+        "L02M02S02"
+      ]
+    },
+    {
+      "mediumId": "L03M01",
+      "id": "L03M01S02",
+      "name": "성능 테스트",
+      "type": "small",
+      "status": "READY",
+      "start": "",
+      "end": "",
+      "planStart": "2026-10-05",
+      "planEnd": "2026-10-16",
+      "expectDays": 10,
+      "progress": 0,
+      "warning": 140,
+      "delay": 190,
+      "dependencies": [
+        "L03M01S01"
+      ]
+    },
+    {
+      "mediumId": "L03M02",
+      "id": "L03M02S01",
+      "name": "스테이징 배포",
+      "type": "small",
+      "status": "READY",
+      "start": "",
+      "end": "",
+      "planStart": "2026-10-12",
+      "planEnd": "2026-10-16",
+      "expectDays": 5,
+      "progress": 0,
+      "warning": 120,
+      "delay": 160,
+      "dependencies": [
+        "L03M01S01"
+      ]
+    },
+    {
+      "mediumId": "L03M02",
+      "id": "L03M02S02",
+      "name": "운영 배포",
+      "type": "small",
+      "status": "READY",
+      "start": "",
+      "end": "",
+      "planStart": "2026-10-19",
+      "planEnd": "2026-10-23",
+      "expectDays": 5,
+      "progress": 0,
+      "warning": 120,
+      "delay": 160,
+      "dependencies": [
+        "L03M02S01"
+      ],
+      "afterDependencies": [
+        "L03M01S02"
+      ]
+    },
+    {
+      "mediumId": "L03M02",
+      "id": "L03M02S03",
+      "name": "안정화 및 인수",
+      "type": "small",
+      "status": "READY",
+      "start": "",
+      "end": "",
+      "planStart": "2026-10-26",
+      "planEnd": "2026-11-06",
+      "expectDays": 10,
+      "progress": 0,
+      "warning": 120,
+      "delay": 160,
+      "dependencies": [
+        "L03M02S02"
+      ]
+    }
+  ]
+}

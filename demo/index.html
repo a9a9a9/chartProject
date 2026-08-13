@@ -367,6 +367,11 @@
             return null;
           },
           barLabelRenderer: function (item, context) {
+            // item.progress = 원본값, context.progress = 100으로 잘린 표시값
+            if (item.progress > 100) {
+              return item.status + ' · ' + context.progress + '% (원본 ' + item.progress + '%)';
+            }
+
             return item.status + ' · ' + context.progress + '%';
             //return context.progress + '%';
           }
@@ -374,7 +379,10 @@
 
         syncDemoButtons(baseOptions);
 
-        $.getJSON('../data/project-schedule.json')
+        // ?data=project-schedule.json 으로 이전 데이터 파일을 볼 수 있다.
+        var dataFile = (location.search.match(/[?&]data=([^&]+)/) || [])[1] || 'project-schedule-v2.json';
+
+        $.getJSON('../data/' + decodeURIComponent(dataFile))
           .done(function (data) {
             $('#gantt').customGantt($.extend({}, baseOptions, { data: normalizeGanttData(data) }));
           })

@@ -66,7 +66,7 @@
       "start": "2026-01-05",
       "end": "2026-01-23",
       "expectDays": 19,
-      "progress": 98,
+      "progress": 115,
       "color": "#2563eb"
     },
     {
@@ -215,7 +215,7 @@
       "start": "2026-01-08",
       "end": "2026-01-16",
       "expectDays": 9,
-      "progress": 100,
+      "progress": 135,
       "color": "#2563eb",
       "dependencies": [
         "L01M01S01"
@@ -230,7 +230,7 @@
       "start": "2026-01-12",
       "end": "2026-01-23",
       "expectDays": 12,
-      "progress": 95,
+      "progress": 108,
       "color": "#2563eb",
       "dependencies": [
         "L01M01S02"
