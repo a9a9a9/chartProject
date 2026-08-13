@@ -10,8 +10,11 @@
   --cg-bar-soft: rgba(37, 99, 235, 0.18);
   --cg-success: #10b981;
   --cg-danger: #ef4444;
+  --cg-over: #f97316;
   --cg-dependency-line: #94a3b8;
   --cg-dependency-line-active: #2563eb;
+  --cg-after-line: #7c3aed;
+  --cg-after-line-active: #5b21b6;
 }
 
 .custom-gantt {
@@ -481,6 +484,16 @@
   stroke-width: 2;
 }
 
+/* 후행(afterDependencies) 선 */
+.cg-dependency-line.is-after {
+  stroke: var(--cg-after-line);
+}
+
+.cg-dependency-line.is-after.is-highlighted {
+  stroke: var(--cg-after-line-active);
+  stroke-width: 2;
+}
+
 .cg-dependency-line.is-dimmed {
   opacity: 0.18;
 }
@@ -490,6 +503,31 @@
   min-width: 4px;
   border-radius: inherit;
   background: var(--cg-bar);
+}
+
+/* 계획 종료일을 넘긴 구간. 바 오른쪽에 이어 붙어 달력상 초과 기간을 나타낸다. */
+.cg-task-over {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  height: 26px;
+  border-radius: 0 6px 6px 0;
+  background: var(--cg-over);
+}
+
+/* warning 미만 */
+.cg-task-over.is-safe {
+  background: var(--cg-success);
+}
+
+/* warning 이상 delay 미만 */
+.cg-task-over.is-warning {
+  background: var(--cg-over);
+}
+
+/* delay 이상 */
+.cg-task-over.is-delay {
+  background: var(--cg-danger);
 }
 
 .cg-task-bar.is-summary .cg-task-progress {
