@@ -196,7 +196,9 @@
         .toggleClass('is-collapsible', row.type !== 'small')
         .toggleClass('is-collapsed', !!this.collapsed[row.id])
         .toggleClass('is-entering', !!enteringRowIds[row.id])
+        .toggleClass('has-date-error', !!row.invalidDateRange)
         .attr('data-row-id', row.id)
+        .attr('title', row.invalidDateRange ? '시작일이 종료일보다 늦습니다.' : null)
         .data('row', row)
         .css('height', opts.rowHeight);
 
@@ -278,6 +280,7 @@
       var $gridRow = $('<div class="cg-grid-row">')
         .toggleClass('is-group', row.type !== 'small')
         .toggleClass('is-entering', !!enteringRowIds[row.id])
+        .toggleClass('has-date-error', !!row.invalidDateRange)
         .attr('data-row-id', row.id)
         .data('row', row)
         .css({
@@ -289,15 +292,11 @@
         $gridRow.append($('<div class="cg-grid-cell">').toggleClass('is-weekend', unit.isWeekend));
       });
 
-      if (row.start && row.end) {
+      if (row.invalidDateRange) {
+        $gridRow.append(renderDateRangeError(row, opts));
+      } else if (row.start && row.end) {
         if (row.isSummary) {
-          $gridRow.append(renderSummaryLead(row, self.units, unitWidth, lead));
-        }
-        $gridRow.append(renderProgressOverrun(row, self.units, unitWidth, lead));
-        $gridRow.append(renderTaskBar(row, self.units, unitWidth, opts, lead));
-
-        if (opts.showLeadTimeLine) {
-          $gridRow.append(renderLeadTimeMarker(row, self.units, unitWidth, opts, lead));
+          $gridRow.append(renderSummaryLead(row, self.units, unitWidth, opts));
         }
       }
 
@@ -512,7 +511,7 @@
   CustomGantt.prototype.bindTaskContextMenu = function () {
     var self = this;
 
-    this.$element.find('.cg-task-bar').on('contextmenu', function (event) {
+    this.$element.find('.cg-task-bar, .cg-date-range-error').on('contextmenu', function (event) {
       event.preventDefault();
       event.stopPropagation();
       self.openTaskContextMenu($(this).data('taskRow'), event.clientX, event.clientY);
@@ -539,11 +538,16 @@
     var opts = this.options;
     var typeText = row.isSummary ? '요약 일정' : '작업 일정';
     var $menu = $('<div class="cg-context-menu" role="menu">')
+      .toggleClass('has-date-error', !!row.invalidDateRange)
       .append($('<div class="cg-context-title">').text(row.label))
       .append(renderContextRow('유형', typeText))
       .append(renderContextRow('기간', formatDate(row.start, opts.locale) + ' - ' + formatDate(row.end, opts.locale)))
       .append(renderContextRow('상태', row.status || '-'))
       .append(renderContextRow('진행률', clamp(row.progress, 0, 100) + '%'));
+
+    if (row.invalidDateRange) {
+      $menu.prepend(renderDateRangeContextError());
+    }
 
     this.closeTaskContextMenu();
     $('body').append($menu);
@@ -790,7 +794,7 @@
           break;
         }
 
-        if (nextRow.type === 'small' && nextRow.start && nextRow.end) {
+        if (nextRow.type === 'small' && !nextRow.invalidDateRange && nextRow.start && nextRow.end) {
           tasks.push(nextRow);
         }
       }
@@ -823,9 +827,9 @@
 
     row.source = data;
     row.sourceType = data.type;
-    row.start = schedule.start || row.start || null;
-    row.end = schedule.end || row.end || null;
-    row.isPlanned = schedule.isPlanned;
+    row.start = parsedStart || row.start || null;
+    row.end = parsedEnd || row.end || null;
+    row.invalidDateRange = !!(parsedStart && parsedEnd && parsedStart > parsedEnd);
     row.status = data.status;
     row.hasOwnProgress = hasOwnProgress;
     // 진행바 폭은 100%를 넘길 수 없어 clamp 하되, 초과 표시를 위해 원본을 남긴다.
@@ -1183,6 +1187,10 @@
     var ends = [];
 
     rows.forEach(function (row) {
+      if (row.invalidDateRange) {
+        return;
+      }
+
       if (row.start) {
         starts.push(row.start);
       }
@@ -1206,7 +1214,15 @@
     start = stripTime(start);
     end = stripTime(end);
 
-    if (viewMode === 'week') {
+    if (viewMode === 'day') {
+      if (isLastDayOfMonth(start)) {
+        start = addDays(start, -4);
+      }
+
+      if (isFirstDayOfMonth(end)) {
+        end = addDays(end, 4);
+      }
+    } else if (viewMode === 'week') {
       start = startOfWeek(start);
     } else if (viewMode === 'month') {
       start = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -1231,8 +1247,8 @@
     return units;
   }
 
-  function renderTaskBar(row, units, unitWidth, options, lead) {
-    var metrics = getTaskBarMetrics(row, units, unitWidth, lead);
+  function renderTaskBar(row, units, unitWidth, options) {
+    var metrics = getTaskBarMetrics(row, units, unitWidth, options);
 
     if (!metrics) {
       return $();
@@ -1264,73 +1280,17 @@
     return $bar.append($progress, $name);
   }
 
-  // 초과 구간은 계획 종료일 "다음 날부터" 실제 경과분까지. 바 바깥으로 이어 붙인다.
-  function renderProgressOverrun(row, units, unitWidth, lead) {
-    var overrunDays = getOverrunDays(row);
-
-    if (!overrunDays) {
-      return $();
-    }
-
-    var planned = getTaskBarMetrics(row, units, unitWidth, lead);
-    var extended = getTaskBarMetrics({
-      start: row.start,
-      end: addDays(row.end, overrunDays)
-    }, units, unitWidth, lead);
-
-    if (!planned || !extended) {
-      return $();
-    }
-
-    var plannedRight = planned.left + planned.width;
-    var width = (extended.left + extended.width) - plannedRight;
-
-    if (width <= 0) {
-      return $();
-    }
-
-    // 바 뒤로 조금 물려 시작해 이음매를 없앤다. 오른쪽 끝은 그대로 둔다.
-    var overlap = 4;
-
-    return $('<div class="cg-task-over">')
-      .addClass('is-' + getOverProgressLevel(row))
-      .attr('title', '계획 종료 ' + overrunDays + '일 초과 (진행률 ' + row.rawProgress + '%)')
-      .css({ left: plannedRight - overlap, width: width + overlap });
+  function renderDateRangeError(row, options) {
+    return $('<div class="cg-date-range-error">')
+      .data('taskRow', row)
+      .attr('title', formatDate(row.start, options.locale) + ' - ' + formatDate(row.end, options.locale))
+      .text('날짜 정보가 올바르지 않습니다');
   }
 
-  // 초과 일수 = 계획 기간 x (진행률 - 100) / 100
-  function getOverrunDays(row) {
-    if (!(row.rawProgress > 100) || !row.start || !row.end) {
-      return 0;
-    }
-
-    var plannedDays = diffDays(row.start, row.end) + 1;
-
-    return Math.max(Math.round(plannedDays * (row.rawProgress - 100) / 100), 0);
-  }
-
-  // 초과분 색 단계. warning 미만 초록 / warning~delay 주황 / delay 이상 빨강.
-  function getOverProgressLevel(row) {
-    var source = row.source || {};
-    var value = row.rawProgress;
-    var warning = toThreshold(source.warning);
-    var delay = toThreshold(source.delay);
-
-    if (delay !== null && value >= delay) {
-      return 'delay';
-    }
-
-    if (warning !== null) {
-      return value >= warning ? 'warning' : 'safe';
-    }
-
-    return 'warning';
-  }
-
-  function toThreshold(raw) {
-    var value = Number(raw);
-
-    return raw !== undefined && raw !== null && raw !== '' && !Number.isNaN(value) ? value : null;
+  function renderDateRangeContextError() {
+    return $('<div class="cg-context-error">')
+      .append($('<span class="cg-context-error-icon">').text('!'))
+      .append($('<span>').text('시작일이 종료일보다 늦습니다.'));
   }
 
   function getBarLabel(row, progress, options) {
@@ -1358,8 +1318,8 @@
     return String(label);
   }
 
-  function renderLeadTimeMarker(row, units, unitWidth, options, lead) {
-    var leadTime = getLeadTimeValue(row, options);
+  function renderSummaryLead(row, units, unitWidth, options) {
+    var metrics = getTaskBarMetrics(row, units, unitWidth, options);
 
     if (leadTime === null) {
       return $();
@@ -1411,113 +1371,7 @@
     });
   }
 
-  function createSvgElement(tag) {
-    return document.createElementNS('http://www.w3.org/2000/svg', tag);
-  }
-
-  function createDependencyArrowMarker(id, color) {
-    var marker = createSvgElement('marker');
-    var arrow = createSvgElement('path');
-
-    marker.setAttribute('id', id);
-    marker.setAttribute('viewBox', '0 0 8 8');
-    marker.setAttribute('refX', '7');
-    marker.setAttribute('refY', '4');
-    marker.setAttribute('markerWidth', '5');
-    marker.setAttribute('markerHeight', '5');
-    marker.setAttribute('orient', 'auto-start-reverse');
-
-    arrow.setAttribute('d', 'M0,0 L8,4 L0,8 Z');
-    arrow.setAttribute('fill', color);
-
-    marker.appendChild(arrow);
-    return marker;
-  }
-
-  function buildDependencyLinePath(fromX, fromY, toX, toY, rowHeight) {
-    var lead = dependencyDetourLead;
-    var midX = fromX + lead;
-
-    if (toX - lead >= midX) {
-      return ['M', fromX, fromY, 'L', midX, fromY, 'L', midX, toY, 'L', toX, toY].join(' ');
-    }
-
-    var detourX = toX - lead;
-    var detourY = fromY <= toY ? fromY + (rowHeight / 2) : fromY - (rowHeight / 2);
-
-    return [
-      'M', fromX, fromY,
-      'L', midX, fromY,
-      'L', midX, detourY,
-      'L', detourX, detourY,
-      'L', detourX, toY,
-      'L', toX, toY
-    ].join(' ');
-  }
-
-  // 후행선: 내 오른쪽 -> 대상 오른쪽.
-  // 선행선은 대상의 왼쪽으로 들어가므로, 후행선은 두 bar 오른쪽 바깥의 세로선을 타고
-  // 대상 오른쪽으로 되짚어 들어간다. 그래야 선행선이 지나는 영역과 겹치지 않는다.
-  function buildAfterDependencyPath(fromX, fromY, toX, toY, maxX) {
-    // 차트 오른쪽 밖으로 나가면 스크롤 영역에서 잘리므로 경계 안으로 제한한다.
-    // bar 는 항상 taskBarInset 만큼 안쪽에서 끝나므로 turnX > toX 는 유지된다.
-    var turnX = Math.min(Math.max(fromX, toX) + afterDependencyGap, maxX - 2);
-
-    return ['M', fromX, fromY, 'L', turnX, fromY, 'L', turnX, toY, 'L', toX, toY].join(' ');
-  }
-
-  function renderDependencyLines(edges, rowIndexMap, rowCount, units, unitWidth, rowHeight, arrowId, lead) {
-    if (!edges.length) {
-      return $();
-    }
-
-    var svg = createSvgElement('svg');
-    var defs = createSvgElement('defs');
-    var maxX = (lead || 0) + (units.length * unitWidth);
-
-    svg.setAttribute('class', 'cg-dependency-svg');
-    svg.setAttribute('width', maxX);
-    svg.setAttribute('height', rowCount * rowHeight);
-
-    defs.appendChild(createDependencyArrowMarker(arrowId, '#94a3b8'));
-    defs.appendChild(createDependencyArrowMarker(arrowId + '-active', '#2563eb'));
-    defs.appendChild(createDependencyArrowMarker(arrowId + '-after', '#7c3aed'));
-    defs.appendChild(createDependencyArrowMarker(arrowId + '-after-active', '#5b21b6'));
-    svg.appendChild(defs);
-
-    edges.forEach(function (edge) {
-      var fromMetrics = getTaskBarMetrics(edge.from, units, unitWidth, lead);
-      var toMetrics = getTaskBarMetrics(edge.to, units, unitWidth, lead);
-
-      if (!fromMetrics || !toMetrics) {
-        return;
-      }
-
-      var isAfter = edge.type === 'after';
-      var fromY = (rowIndexMap[edge.from.id] * rowHeight) + (rowHeight / 2);
-      var toY = (rowIndexMap[edge.to.id] * rowHeight) + (rowHeight / 2);
-      var fromX = fromMetrics.left + fromMetrics.width;
-      // 후행선은 양쪽 다 오른쪽 끝을 잇는다.
-      var toX = isAfter ? toMetrics.left + toMetrics.width : toMetrics.left;
-      var suffix = isAfter ? '-after' : '';
-      var path = createSvgElement('path');
-
-      path.setAttribute('class', 'cg-dependency-line' + (isAfter ? ' is-after' : ''));
-      path.setAttribute('data-from-row', edge.from.id);
-      path.setAttribute('data-to-row', edge.to.id);
-      path.setAttribute('data-arrow', 'url(#' + arrowId + suffix + ')');
-      path.setAttribute('data-arrow-active', 'url(#' + arrowId + suffix + '-active)');
-      path.setAttribute('marker-end', 'url(#' + arrowId + suffix + ')');
-      path.setAttribute('d', isAfter
-        ? buildAfterDependencyPath(fromX, fromY, toX, toY, maxX)
-        : buildDependencyLinePath(fromX, fromY, toX, toY, rowHeight));
-      svg.appendChild(path);
-    });
-
-    return $(svg);
-  }
-
-  function getTaskBarMetrics(row, units, unitWidth, lead) {
+  function getTaskBarMetrics(row, units, unitWidth, options) {
     var start = stripTime(row.start);
     var end = stripTime(row.end);
 
@@ -1525,8 +1379,12 @@
       return null;
     }
 
-    var startOffset = (lead || 0) + dateToOffset(start, units, unitWidth);
-    var endOffset = (lead || 0) + dateToOffset(addDays(end, 1), units, unitWidth);
+    if (normalizeViewMode(options.viewMode) === 'day' && options.excludeWeekends) {
+      end = moveWeekendEndToFriday(end);
+    }
+
+    var startOffset = dateToOffset(start, units, unitWidth);
+    var endOffset = dateToOffset(addDays(end, 1), units, unitWidth);
 
     return {
       left: startOffset + taskBarInset,
@@ -1619,6 +1477,26 @@
 
   function isWeekend(date) {
     return date.getDay() === 0 || date.getDay() === 6;
+  }
+
+  function moveWeekendEndToFriday(date) {
+    if (date.getDay() === 6) {
+      return addDays(date, -1);
+    }
+
+    if (date.getDay() === 0) {
+      return addDays(date, -2);
+    }
+
+    return date;
+  }
+
+  function isFirstDayOfMonth(date) {
+    return date.getDate() === 1;
+  }
+
+  function isLastDayOfMonth(date) {
+    return date.getDate() === new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   }
 
   function formatDate(date, locale) {
