@@ -282,12 +282,18 @@
   white-space: nowrap;
 }
 
-.cg-lt-badge.is-under {
+/* 초과 막대와 같은 warning/delay 단계를 쓴다. */
+.cg-lt-badge.is-safe {
   background: rgba(16, 185, 129, 0.14);
   color: #047857;
 }
 
-.cg-lt-badge.is-over {
+.cg-lt-badge.is-warning {
+  background: rgba(249, 115, 22, 0.14);
+  color: #c2410c;
+}
+
+.cg-lt-badge.is-delay {
   background: rgba(239, 68, 68, 0.14);
   color: #b91c1c;
 }
@@ -417,21 +423,14 @@
   width: 3px;
   height: 36px;
   pointer-events: none;
+  /* 기준선이라 상태와 무관하게 항상 초록. */
   background-image: repeating-linear-gradient(
     180deg,
-    var(--cg-lt-marker-color) 0,
-    var(--cg-lt-marker-color) 9px,
+    var(--cg-success) 0,
+    var(--cg-success) 9px,
     transparent 9px,
     transparent 13px
   );
-}
-
-.cg-lt-marker.is-under {
-  --cg-lt-marker-color: var(--cg-success);
-}
-
-.cg-lt-marker.is-over {
-  --cg-lt-marker-color: var(--cg-danger);
 }
 
 .cg-summary-lead {
@@ -512,22 +511,35 @@
   top: 8px;
   height: 26px;
   border-radius: 0 6px 6px 0;
-  background: var(--cg-over);
+  --cg-over-stripe: var(--cg-over);
+  --cg-over-soft: rgba(249, 115, 22, 0.16);
+  /* 계획 구간(단색 bar)과 구분되도록 빗금으로 칠한다. 색은 단계별로 바뀐다. */
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cg-over-stripe) 0,
+    var(--cg-over-stripe) 5px,
+    var(--cg-over-soft) 5px,
+    var(--cg-over-soft) 10px
+  );
+  box-shadow: inset 0 0 0 1px var(--cg-over-stripe);
 }
 
 /* warning 미만 */
 .cg-task-over.is-safe {
-  background: var(--cg-success);
+  --cg-over-stripe: var(--cg-success);
+  --cg-over-soft: rgba(16, 185, 129, 0.16);
 }
 
 /* warning 이상 delay 미만 */
 .cg-task-over.is-warning {
-  background: var(--cg-over);
+  --cg-over-stripe: var(--cg-over);
+  --cg-over-soft: rgba(249, 115, 22, 0.16);
 }
 
 /* delay 이상 */
 .cg-task-over.is-delay {
-  background: var(--cg-danger);
+  --cg-over-stripe: var(--cg-danger);
+  --cg-over-soft: rgba(239, 68, 68, 0.16);
 }
 
 .cg-task-bar.is-summary .cg-task-progress {

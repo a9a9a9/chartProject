@@ -21,6 +21,97 @@
   var colorThemes = {
     default: ['#2563eb', '#0891b2', '#16a34a', '#7c3aed', '#ea580c', '#dc2626']
   };
+  var monthShortNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  // currentLanguage 가 'ko' 면 한국어, 그 밖의 값은 모두 영어로 떨어진다.
+  var translations = {
+    ko: {
+      emptyData: '표시할 일정 데이터가 없습니다.',
+      sidebarHeader: '분류 / 작업',
+      toggleRow: '분류 접기/펼치기',
+      showSidebar: '분류 영역 보이기',
+      hideSidebar: '분류 영역 숨기기',
+      expandAll: '전체 펼치기',
+      collapseAll: '전체 접기',
+      close: '닫기',
+      scheduleName: '일정명',
+      startDate: '시작일',
+      endDate: '종료일',
+      status: '상태',
+      progress: '진행률',
+      color: '색상',
+      type: '유형',
+      period: '기간',
+      summaryTask: '요약 일정',
+      normalTask: '작업 일정',
+      largeGroup: '대분류',
+      mediumGroup: '중분류',
+      smallTask: '작업',
+      leadTimeOver: '리드타임(L/T) {days}일 기준 {diff}일 초과',
+      leadTimeUnder: '리드타임(L/T) {days}일 기준 {diff}일 여유',
+      leadTimeBadge: '{base} · 진행률 {progress}% ({level})',
+      leadTimeMarker: 'L/T 기준({days}일): {date}까지',
+      overrun: '계획 종료 {days}일 초과 · 진행률 {progress}% ({level})',
+      levelSafe: '정상',
+      levelWarning: '주의',
+      levelDelay: '지연',
+      monthLabel: '{month}월',
+      weekLabel: '{month}/{day}주'
+    },
+    en: {
+      emptyData: 'No schedule data to display.',
+      sidebarHeader: 'Category / Task',
+      toggleRow: 'Collapse or expand category',
+      showSidebar: 'Show category panel',
+      hideSidebar: 'Hide category panel',
+      expandAll: 'Expand all',
+      collapseAll: 'Collapse all',
+      close: 'Close',
+      scheduleName: 'Name',
+      startDate: 'Start',
+      endDate: 'End',
+      status: 'Status',
+      progress: 'Progress',
+      color: 'Color',
+      type: 'Type',
+      period: 'Period',
+      summaryTask: 'Summary',
+      normalTask: 'Task',
+      largeGroup: 'Group',
+      mediumGroup: 'Subgroup',
+      smallTask: 'Task',
+      leadTimeOver: '{diff} days over the {days}-day lead time (L/T)',
+      leadTimeUnder: '{diff} days under the {days}-day lead time (L/T)',
+      leadTimeBadge: '{base} · Progress {progress}% ({level})',
+      leadTimeMarker: 'L/T baseline ({days} days): through {date}',
+      overrun: '{days} days past the planned end · Progress {progress}% ({level})',
+      levelSafe: 'On track',
+      levelWarning: 'Warning',
+      levelDelay: 'Delayed',
+      monthLabel: '{monthName}',
+      weekLabel: '{month}/{day}'
+    }
+  };
+
+  function normalizeLanguage(value) {
+    return value === 'ko' ? 'ko' : 'en';
+  }
+
+  function translate(options, key, params) {
+    var dict = translations[normalizeLanguage(options && options.currentLanguage)];
+    var text = dict[key];
+
+    if (text === undefined) {
+      return key;
+    }
+
+    if (!params) {
+      return text;
+    }
+
+    return text.replace(/\{(\w+)\}/g, function (match, name) {
+      return params[name] === undefined ? match : params[name];
+    });
+  }
   var defaults = {
     data: [],
     title: 'Project Gantt',
@@ -31,6 +122,7 @@
     monthWidth: 132,
     rowHeight: 42,
     locale: 'ko-KR',
+    currentLanguage: 'ko',
     showToday: true,
     viewMode: 'day',
     initialCenterDate: null,
@@ -165,7 +257,7 @@
       .toggleClass('has-backward-dependency', this.hasBackwardDependency);
 
     if (!this.rows.length || !this.units.length) {
-      this.$element.append($('<div class="cg-empty">').text('표시할 일정 데이터가 없습니다.'));
+      this.$element.append($('<div class="cg-empty">').text(translate(opts, 'emptyData')));
       return;
     }
 
@@ -184,10 +276,10 @@
     $toolbar.append($title, $range);
     $sidebar.append(
       $('<div class="cg-header-cell">')
-        .append($('<span class="cg-header-title">').text('분류 / 작업'))
+        .append($('<span class="cg-header-title">').text(translate(opts, 'sidebarHeader')))
         .append(
           $('<div class="cg-header-actions">')
-            .append(renderSidebarToggleButton(this.sidebarCollapsed))
+            .append(renderSidebarToggleButton(this.sidebarCollapsed, opts))
         )
     );
     visibleRows.forEach(function (row) {
@@ -201,7 +293,7 @@
         .css('height', opts.rowHeight);
 
       if (row.type !== 'small') {
-        $label.append($('<button class="cg-toggle" type="button" aria-label="분류 접기/펼치기">'));
+        $label.append($('<button class="cg-toggle" type="button">').attr('aria-label', translate(opts, 'toggleRow')));
       }
 
       $label.append($('<span class="cg-label-text">').text(row.label));
@@ -293,7 +385,7 @@
         if (row.isSummary) {
           $gridRow.append(renderSummaryLead(row, self.units, unitWidth, lead));
         }
-        $gridRow.append(renderProgressOverrun(row, self.units, unitWidth, lead));
+        $gridRow.append(renderProgressOverrun(row, self.units, unitWidth, lead, opts));
         $gridRow.append(renderTaskBar(row, self.units, unitWidth, opts, lead));
 
         if (opts.showLeadTimeLine) {
@@ -316,8 +408,8 @@
       self.$element.toggleClass('is-sidebar-collapsed', self.sidebarCollapsed);
       $(this)
         .toggleClass('is-collapsed', self.sidebarCollapsed)
-        .attr('aria-label', self.sidebarCollapsed ? '분류 영역 보이기' : '분류 영역 숨기기')
-        .attr('title', self.sidebarCollapsed ? '분류 영역 보이기' : '분류 영역 숨기기');
+        .attr('aria-label', translate(self.options, self.sidebarCollapsed ? 'showSidebar' : 'hideSidebar'))
+        .attr('title', translate(self.options, self.sidebarCollapsed ? 'showSidebar' : 'hideSidebar'));
     });
 
     this.$element.find('.cg-row-label.is-collapsible').on('click', function () {
@@ -337,16 +429,16 @@
       .append(
         $('<div class="cg-modal-header">')
           .append($('<h3 class="cg-modal-title">').text(row.label))
-          .append($('<button class="cg-modal-close" type="button" aria-label="닫기">').text('×'))
+          .append($('<button class="cg-modal-close" type="button">').attr('aria-label', translate(opts, 'close')).text('×'))
       )
       .append(
         $('<div class="cg-modal-body">')
-          .append(renderDetailItem('일정명', row.label))
-          .append(renderDetailItem('시작일', formatDate(row.start, opts.locale)))
-          .append(renderDetailItem('종료일', formatDate(row.end, opts.locale)))
-          .append(renderDetailItem('상태', row.status || '-'))
-          .append(renderDetailItem('진행률', clamp(row.progress, 0, 100) + '%'))
-          .append(renderDetailItem('색상', row.color || '-'))
+          .append(renderDetailItem(translate(opts, 'scheduleName'), row.label))
+          .append(renderDetailItem(translate(opts, 'startDate'), formatDate(row.start, opts.locale)))
+          .append(renderDetailItem(translate(opts, 'endDate'), formatDate(row.end, opts.locale)))
+          .append(renderDetailItem(translate(opts, 'status'), row.status || '-'))
+          .append(renderDetailItem(translate(opts, 'progress'), clamp(row.progress, 0, 100) + '%'))
+          .append(renderDetailItem(translate(opts, 'color'), row.color || '-'))
       );
 
     this.closeDetailModal();
@@ -537,13 +629,13 @@
 
   CustomGantt.prototype.openTaskContextMenu = function (row, clientX, clientY) {
     var opts = this.options;
-    var typeText = row.isSummary ? '요약 일정' : '작업 일정';
+    var typeText = translate(opts, row.isSummary ? 'summaryTask' : 'normalTask');
     var $menu = $('<div class="cg-context-menu" role="menu">')
       .append($('<div class="cg-context-title">').text(row.label))
-      .append(renderContextRow('유형', typeText))
-      .append(renderContextRow('기간', formatDate(row.start, opts.locale) + ' - ' + formatDate(row.end, opts.locale)))
-      .append(renderContextRow('상태', row.status || '-'))
-      .append(renderContextRow('진행률', clamp(row.progress, 0, 100) + '%'));
+      .append(renderContextRow(translate(opts, 'type'), typeText))
+      .append(renderContextRow(translate(opts, 'period'), formatDate(row.start, opts.locale) + ' - ' + formatDate(row.end, opts.locale)))
+      .append(renderContextRow(translate(opts, 'status'), row.status || '-'))
+      .append(renderContextRow(translate(opts, 'progress'), clamp(row.progress, 0, 100) + '%'));
 
     this.closeTaskContextMenu();
     $('body').append($menu);
@@ -700,9 +792,9 @@
     $scroll.scrollLeft(Math.max(scrollLeft, 0));
   };
 
-  function renderToggleAllButton(rows, collapsed) {
+  function renderToggleAllButton(rows, collapsed, options) {
     var isCollapsed = areAllGroupsCollapsed(rows, collapsed);
-    var label = isCollapsed ? '전체 펼치기' : '전체 접기';
+    var label = translate(options, isCollapsed ? 'expandAll' : 'collapseAll');
 
     return $('<button class="cg-toggle-all" type="button">')
       .toggleClass('is-collapsed', isCollapsed)
@@ -710,8 +802,8 @@
       .attr('title', label);
   }
 
-  function renderSidebarToggleButton(isCollapsed) {
-    var label = isCollapsed ? '분류 영역 보이기' : '분류 영역 숨기기';
+  function renderSidebarToggleButton(isCollapsed, options) {
+    var label = translate(options, isCollapsed ? 'showSidebar' : 'hideSidebar');
 
     return $('<button class="cg-sidebar-toggle" type="button">')
       .toggleClass('is-collapsed', isCollapsed)
@@ -740,7 +832,7 @@
       rows.push(createRowFromData(largeGroup, {
         type: 'large',
         id: largeId,
-        label: largeGroup.large || largeGroup.name || '대분류'
+        label: largeGroup.large || largeGroup.name || translate(options, 'largeGroup')
       }, options, palette, colorIndex));
 
       (largeGroup.children || []).forEach(function (mediumGroup, mediumIndex) {
@@ -750,7 +842,7 @@
           type: 'medium',
           id: mediumId,
           parentId: largeId,
-          label: mediumGroup.medium || mediumGroup.name || '중분류'
+          label: mediumGroup.medium || mediumGroup.name || translate(options, 'mediumGroup')
         }, options, palette, colorIndex));
 
         (mediumGroup.children || []).forEach(function (task) {
@@ -758,7 +850,7 @@
             type: 'small',
             id: mediumId + '-small-' + rows.length,
             parentId: mediumId,
-            label: task.small || task.name || '작업',
+            label: task.small || task.name || translate(options, 'smallTask'),
             progress: 0
           }, options, palette, colorIndex));
           colorIndex += 1;
@@ -1014,10 +1106,20 @@
     var diff = actualDays - leadTime;
     var isOver = diff > 0;
 
+    // 글자는 L/T 일수 차이, 색은 진행률 단계라 툴팁에 둘 다 적는다.
+    var leadTimeText = translate(options, isOver ? 'leadTimeOver' : 'leadTimeUnder', {
+      days: leadTime,
+      diff: Math.abs(diff)
+    });
+
     return $('<span class="cg-lt-badge">')
-      .toggleClass('is-over', isOver)
-      .toggleClass('is-under', !isOver)
-      .attr('title', '리드타임(L/T) ' + leadTime + '일 기준 ' + (isOver ? Math.abs(diff) + '일 초과' : Math.abs(diff) + '일 여유'))
+      // 색 단계는 초과 막대와 동일하게 warning/delay 기준을 따른다.
+      .addClass('is-' + getProgressLevel(row))
+      .attr('title', translate(options, 'leadTimeBadge', {
+        base: leadTimeText,
+        progress: getDisplayProgress(row),
+        level: getProgressLevelText(row, options)
+      }))
       .text('L/T ' + (diff > 0 ? '+' : '') + diff);
   }
 
@@ -1083,7 +1185,9 @@
       end: 'end',
       status: 'status',
       progress: 'progress',
-      color: 'color'
+      color: 'color',
+      // 이름이 비었을 때 쓰는 기본 라벨의 언어. 플러그인 기본값과 맞춘다.
+      currentLanguage: defaults.currentLanguage
     }, options);
     var largeMap = {};
     var mediumMap = {};
@@ -1092,7 +1196,7 @@
     (largeList || []).forEach(function (largeItem) {
       var largeId = getValue(largeItem, fields.largeId);
       var largeGroup = {
-        large: getValue(largeItem, fields.largeName) || largeItem.large || '대분류',
+        large: getValue(largeItem, fields.largeName) || largeItem.large || translate(fields, 'largeGroup'),
         id: largeId,
         type: largeItem.type || 'large',
         start: getValue(largeItem, fields.start),
@@ -1112,7 +1216,7 @@
       var parentLargeId = getValue(mediumItem, fields.mediumLargeId);
       var largeGroup = largeMap[parentLargeId];
       var mediumGroup = {
-        medium: getValue(mediumItem, fields.mediumName) || mediumItem.medium || '중분류',
+        medium: getValue(mediumItem, fields.mediumName) || mediumItem.medium || translate(fields, 'mediumGroup'),
         id: mediumId,
         type: mediumItem.type || 'medium',
         start: getValue(mediumItem, fields.start),
@@ -1144,7 +1248,7 @@
       var parentMediumId = getValue(smallItem, fields.smallMediumId);
       var mediumGroup = mediumMap[parentMediumId];
       var task = {
-        small: getValue(smallItem, fields.smallName) || smallItem.small || '작업',
+        small: getValue(smallItem, fields.smallName) || smallItem.small || translate(fields, 'smallTask'),
         id: getValue(smallItem, fields.smallId),
         type: smallItem.type || 'small',
         start: getValue(smallItem, fields.start),
@@ -1265,7 +1369,7 @@
   }
 
   // 초과 구간은 계획 종료일 "다음 날부터" 실제 경과분까지. 바 바깥으로 이어 붙인다.
-  function renderProgressOverrun(row, units, unitWidth, lead) {
+  function renderProgressOverrun(row, units, unitWidth, lead, options) {
     var overrunDays = getOverrunDays(row);
 
     if (!overrunDays) {
@@ -1293,8 +1397,12 @@
     var overlap = 4;
 
     return $('<div class="cg-task-over">')
-      .addClass('is-' + getOverProgressLevel(row))
-      .attr('title', '계획 종료 ' + overrunDays + '일 초과 (진행률 ' + row.rawProgress + '%)')
+      .addClass('is-' + getProgressLevel(row))
+      .attr('title', translate(options, 'overrun', {
+        days: overrunDays,
+        progress: row.rawProgress,
+        level: getProgressLevelText(row, options)
+      }))
       .css({ left: plannedRight - overlap, width: width + overlap });
   }
 
@@ -1325,6 +1433,29 @@
     }
 
     return 'warning';
+  }
+
+  // 초과 막대와 L/T 배지가 같은 색 단계를 쓰도록 판정을 한 군데로 모은다.
+  // 100 이하면 초과 자체가 없으므로 안전으로 본다.
+  function getProgressLevel(row) {
+    return row.rawProgress > 100 ? getOverProgressLevel(row) : 'safe';
+  }
+
+  function getProgressLevelText(row, options) {
+    var keys = {
+      safe: 'levelSafe',
+      warning: 'levelWarning',
+      delay: 'levelDelay'
+    };
+
+    return translate(options, keys[getProgressLevel(row)]);
+  }
+
+  // rawProgress 는 데이터에 progress 가 없으면 null 이라 요약 행에서는 계산값을 쓴다.
+  function getDisplayProgress(row) {
+    return row.rawProgress === null || row.rawProgress === undefined
+      ? clamp(row.progress, 0, 100)
+      : row.rawProgress;
   }
 
   function toThreshold(raw) {
@@ -1372,14 +1503,10 @@
       return $();
     }
 
-    var actualDays = diffDays(row.start, row.end) + 1;
-    var isOver = actualDays > leadTime;
-
+    // 마커는 기준선일 뿐이라 상태와 무관하게 항상 같은 색으로 둔다.
     return $('<div class="cg-lt-marker">')
-      .toggleClass('is-over', isOver)
-      .toggleClass('is-under', !isOver)
       .css('left', boundaryMetrics.left + boundaryMetrics.width)
-      .attr('title', 'L/T 기준(' + leadTime + '일): ' + formatDate(boundaryDate, options.locale) + '까지');
+      .attr('title', translate(options, 'leadTimeMarker', { days: leadTime, date: formatDate(boundaryDate, options.locale) }));
   }
 
   // 첫 컬럼만 lead 만큼 넓히고 나머지는 unitWidth 그대로 둔다.
@@ -1631,11 +1758,17 @@
 
   function formatUnitLabel(unit, options) {
     if (unit.viewMode === 'month') {
-      return String(unit.start.getMonth() + 1) + '월';
+      return translate(options, 'monthLabel', {
+        month: unit.start.getMonth() + 1,
+        monthName: monthShortNames[unit.start.getMonth()]
+      });
     }
 
     if (unit.viewMode === 'week') {
-      return (unit.start.getMonth() + 1) + '/' + unit.start.getDate() + '주';
+      return translate(options, 'weekLabel', {
+        month: unit.start.getMonth() + 1,
+        day: unit.start.getDate()
+      });
     }
 
     return String(unit.start.getDate());

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>jQuery Custom Gantt Demo</title>
-    <link rel="stylesheet" href="../dist/jquery.custom-gantt.css?v=20260803-5" />
+    <link rel="stylesheet" href="../dist/jquery.custom-gantt.css?v=20260820-1" />
     <style>
       html,
       body {
@@ -242,6 +242,84 @@
         color: #0f172a;
       }
 
+      /* 진행 막대 범례. 스와치 값은 플러그인 CSS와 동일하게 맞춘다. */
+      .demo-bar-legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 16px;
+        margin: 10px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .demo-bar-legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #475569;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: nowrap;
+      }
+
+      .demo-bar-legend-swatch {
+        flex: 0 0 auto;
+        width: 24px;
+        height: 12px;
+        border-radius: 3px;
+      }
+
+      .demo-bar-legend-swatch.is-progress {
+        background: #2563eb;
+      }
+
+      .demo-bar-legend-swatch.is-planned {
+        background: rgba(37, 99, 235, 0.18);
+        box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.3);
+      }
+
+      .demo-bar-legend-swatch.is-over-safe,
+      .demo-bar-legend-swatch.is-over-warning,
+      .demo-bar-legend-swatch.is-over-delay {
+        background: repeating-linear-gradient(
+          45deg,
+          var(--demo-over) 0,
+          var(--demo-over) 5px,
+          var(--demo-over-soft) 5px,
+          var(--demo-over-soft) 10px
+        );
+        box-shadow: inset 0 0 0 1px var(--demo-over);
+      }
+
+      .demo-bar-legend-swatch.is-over-safe {
+        --demo-over: #10b981;
+        --demo-over-soft: rgba(16, 185, 129, 0.16);
+      }
+
+      .demo-bar-legend-swatch.is-over-warning {
+        --demo-over: #f97316;
+        --demo-over-soft: rgba(249, 115, 22, 0.16);
+      }
+
+      .demo-bar-legend-swatch.is-over-delay {
+        --demo-over: #ef4444;
+        --demo-over-soft: rgba(239, 68, 68, 0.16);
+      }
+
+      .demo-bar-legend-swatch.is-lt {
+        width: 3px;
+        height: 16px;
+        margin: 0 10px;
+        border-radius: 0;
+        background-image: repeating-linear-gradient(
+          180deg,
+          #10b981 0,
+          #10b981 9px,
+          transparent 9px,
+          transparent 13px
+        );
+      }
+
       #gantt {
         flex: 1 1 auto;
         min-height: 0;
@@ -266,6 +344,26 @@
         <div>
           <h1 class="demo-title">jQuery Custom Gantt</h1>
           <p class="demo-desc">6개월 회사 프로젝트 일정을 대/중/소 분류 Gantt chart로 표현합니다.</p>
+          <ul class="demo-bar-legend" aria-label="진행 막대 범례">
+            <li class="demo-bar-legend-item">
+              <span class="demo-bar-legend-swatch is-progress"></span>진행 중
+            </li>
+            <li class="demo-bar-legend-item">
+              <span class="demo-bar-legend-swatch is-planned"></span>계획 구간 (미진행)
+            </li>
+            <li class="demo-bar-legend-item">
+              <span class="demo-bar-legend-swatch is-over-safe"></span>초과 (안전)
+            </li>
+            <li class="demo-bar-legend-item">
+              <span class="demo-bar-legend-swatch is-over-warning"></span>초과 (warning)
+            </li>
+            <li class="demo-bar-legend-item">
+              <span class="demo-bar-legend-swatch is-over-delay"></span>초과 (delay)
+            </li>
+            <li class="demo-bar-legend-item">
+              <span class="demo-bar-legend-swatch is-lt"></span>L/T 기준 막대
+            </li>
+          </ul>
         </div>
         <div class="demo-actions">
           <div class="demo-toggle" aria-label="날짜 보기 단위">
@@ -328,7 +426,7 @@
     </main>
 
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="../dist/jquery.custom-gantt.js?v=20260803-2"></script>
+    <script src="../dist/jquery.custom-gantt.js?v=20260820-1"></script>
     <script>
       $(function () {
         var isAllCollapsed = true;
@@ -338,6 +436,7 @@
           dayWidth: 28,
           weekWidth: 78,
           monthWidth: 112,
+          currentLanguage : 'en',
           viewMode: 'week',
           initialCenterDate: 'start',
           initialCollapsed: true,
