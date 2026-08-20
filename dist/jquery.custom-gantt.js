@@ -12,6 +12,12 @@
   var pluginName = 'customGantt';
   var instanceCount = 0;
   var rowAnimationMs = 120;
+  // 역방향 선이 대상 bar 왼쪽으로 빠져나가는 거리와 bar 좌우 여백.
+  // 두 값으로 "선이 차트 왼쪽 밖으로 나가는지"를 판정하므로 그리기 쪽과 반드시 같이 쓴다.
+  var dependencyDetourLead = 14;
+  var taskBarInset = 3;
+  // 후행선이 타는 세로선의 여유. 선행선 스텁(14)과 값을 달리해 세로선이 겹치지 않게 한다.
+  var afterDependencyGap = 22;
   var colorThemes = {
     default: ['#2563eb', '#0891b2', '#16a34a', '#7c3aed', '#ea580c', '#dc2626']
   };
@@ -34,13 +40,18 @@
     colorTheme: 'default',
     ignoreDataColors: false,
     colorRenderer: null,
-    barLabelRenderer: null
+    barLabelRenderer: null,
+    showDpndLines: false,
+    dpndLeadWidth: 30,
+    leadTimeField: 'expectDays',
+    showLeadTimeLine: false
   };
 
   function CustomGantt(element, options) {
     this.$element = $(element);
     this.eventNamespace = '.' + pluginName + instanceCount;
     this.modalEventNamespace = '.modal' + pluginName + instanceCount;
+    this.dependencyArrowId = 'cg-dependency-arrow-' + instanceCount;
     instanceCount += 1;
     this.options = $.extend({}, defaults, options);
     this.rows = [];
@@ -51,6 +62,9 @@
     this.pendingScrollPosition = null;
     this.sidebarCollapsed = false;
     this.enteringRowIds = {};
+    this.activeDependencyRowId = null;
+    this.backwardDependencies = [];
+    this.hasBackwardDependency = false;
     this.init();
   }
 
@@ -58,7 +72,19 @@
     this.rows = flattenRows(this.options.data, this.options);
     this.applyInitialCollapsedState();
     this.units = buildUnits(this.options, this.rows);
+    // 좌표로 판정하므로 units 가 만들어진 뒤에 계산한다.
+    this.backwardDependencies = collectBackwardDependencies(this.rows, this.units, getUnitWidth(this.options));
+    this.hasBackwardDependency = this.backwardDependencies.length > 0;
     this.render();
+  };
+
+  // 역방향 선이 있을 때만 첫 셀을 넓혀 선이 왼쪽으로 빠져나갈 여유를 만든다.
+  CustomGantt.prototype.getDependencyLead = function () {
+    if (!this.options.showDpndLines || !this.hasBackwardDependency) {
+      return 0;
+    }
+
+    return Math.max(Number(this.options.dpndLeadWidth) || 0, 0);
   };
 
   CustomGantt.prototype.update = function (options) {
@@ -134,7 +160,9 @@
     this.$element
       .empty()
       .addClass('custom-gantt')
-      .toggleClass('is-sidebar-collapsed', this.sidebarCollapsed);
+      .toggleClass('is-sidebar-collapsed', this.sidebarCollapsed)
+      .toggleClass('has-dependency-lines', !!opts.showDpndLines)
+      .toggleClass('has-backward-dependency', this.hasBackwardDependency);
 
     if (!this.rows.length || !this.units.length) {
       this.$element.append($('<div class="cg-empty">').text('표시할 일정 데이터가 없습니다.'));
@@ -151,7 +179,7 @@
     var $board = $('<div class="cg-board">');
     var $sidebar = $('<div class="cg-sidebar">');
     var $timeline = $('<div class="cg-timeline">');
-    var gridTemplate = 'repeat(' + this.units.length + ', ' + unitWidth + 'px)';
+    var gridTemplate = buildGridTemplate(this.units.length, unitWidth, this.getDependencyLead());
 
     $toolbar.append($title, $range);
     $sidebar.append(
@@ -178,16 +206,28 @@
         $label.append($('<button class="cg-toggle" type="button" aria-label="분류 접기/펼치기">'));
       }
 
-      $sidebar.append(
-        $label.append($('<span class="cg-label-text">').text(row.label))
-      );
+      $label.append($('<span class="cg-label-text">').text(row.label));
+
+      var $ltBadge = buildLeadTimeBadge(row, opts);
+
+      if ($ltBadge) {
+        $label.append($ltBadge);
+      }
+
+      $sidebar.append($label);
     }, this);
 
+    var $rows = this.renderRows(gridTemplate, visibleRows, enteringRowIds);
+
     $timeline.append(this.renderUnits(gridTemplate));
-    $timeline.append(this.renderRows(gridTemplate, visibleRows, enteringRowIds));
+    $timeline.append($rows);
+
+    if (opts.showDpndLines) {
+      this.appendDependencyLines($rows, visibleRows, unitWidth);
+    }
 
     if (opts.showToday) {
-      appendTodayLine($timeline, this.units, unitWidth);
+      appendTodayLine($timeline, this.units, unitWidth, this.getDependencyLead());
     }
 
     $board.append($sidebar, $timeline);
@@ -197,6 +237,7 @@
     this.bindDragScroll();
     this.bindTaskContextMenu();
     this.bindTaskHoverBar();
+    this.bindDependencyLineSelection();
     this.restoreScrollPosition();
     this.applyInitialCenterScroll();
     this.enteringRowIds = {};
@@ -232,6 +273,7 @@
     var self = this;
     var opts = this.options;
     var unitWidth = getUnitWidth(opts);
+    var lead = this.getDependencyLead();
     var $rows = $('<div class="cg-rows">');
 
     visibleRows.forEach(function (row) {
@@ -256,7 +298,6 @@
         if (row.isSummary) {
           $gridRow.append(renderSummaryLead(row, self.units, unitWidth, opts));
         }
-        $gridRow.append(renderTaskBar(row, self.units, unitWidth, opts));
       }
 
       $rows.append($gridRow);
@@ -561,6 +602,67 @@
     $('.cg-task-tooltip').remove();
   };
 
+  CustomGantt.prototype.appendDependencyLines = function ($rows, visibleRows, unitWidth) {
+    var opts = this.options;
+    var rowIndexMap = {};
+
+    visibleRows.forEach(function (row, index) {
+      rowIndexMap[row.id] = index;
+    });
+
+    var edges = buildDependencyEdges(visibleRows);
+    var $svg = renderDependencyLines(edges, rowIndexMap, visibleRows.length, this.units, unitWidth, opts.rowHeight, this.dependencyArrowId, this.getDependencyLead());
+
+    $rows.append($svg);
+  };
+
+  CustomGantt.prototype.bindDependencyLineSelection = function () {
+    var self = this;
+
+    if (!this.options.showDpndLines) {
+      return;
+    }
+
+    this.$element.find('.cg-task-bar').on('click', function (event) {
+      event.stopPropagation();
+      var row = $(this).data('taskRow');
+
+      self.activeDependencyRowId = self.activeDependencyRowId === row.id ? null : row.id;
+      self.applyDependencySelection();
+    });
+
+    this.applyDependencySelection();
+  };
+
+  CustomGantt.prototype.applyDependencySelection = function () {
+    var activeRowId = this.activeDependencyRowId;
+    var $lines = this.$element.find('.cg-dependency-line');
+    var $bars = this.$element.find('.cg-task-bar');
+
+    $bars.removeClass('is-dependency-active');
+
+    if (!activeRowId) {
+      $lines.each(function () {
+        $(this).removeClass('is-dimmed is-highlighted').attr('marker-end', $(this).attr('data-arrow'));
+      });
+      return;
+    }
+
+    $lines.each(function () {
+      var $line = $(this);
+      var isConnected = $line.attr('data-from-row') === activeRowId || $line.attr('data-to-row') === activeRowId;
+
+      $line
+        .toggleClass('is-highlighted', isConnected)
+        .toggleClass('is-dimmed', !isConnected)
+        .attr('marker-end', $line.attr(isConnected ? 'data-arrow-active' : 'data-arrow'));
+    });
+
+    $bars.filter(function () {
+      return $(this).data('taskRow').id === activeRowId;
+    }).addClass('is-dependency-active');
+  };
+
   CustomGantt.prototype.applyInitialCenterScroll = function () {
     var self = this;
     var initialPosition = getInitialCenterPosition(this.options.initialCenterDate, this.units);
@@ -586,15 +688,17 @@
     var unitWidth = getUnitWidth(this.options);
     var sidebarWidth = this.$element.find('.cg-sidebar').outerWidth() || 0;
     var viewportWidth = Math.max($scroll.innerWidth() - sidebarWidth, 0);
+    var lead = this.getDependencyLead();
     var targetOffset = dateToOffset(date, this.units, unitWidth);
     var scrollLeft;
 
     if (align === 'start') {
+      // 넓어진 첫 셀을 그대로 보여 줘야 역방향 선이 잘리지 않는다.
       scrollLeft = targetOffset;
     } else if (align === 'end') {
-      scrollLeft = targetOffset - viewportWidth + unitWidth;
+      scrollLeft = lead + targetOffset - viewportWidth + unitWidth;
     } else {
-      scrollLeft = targetOffset - (viewportWidth / 2);
+      scrollLeft = lead + targetOffset - (viewportWidth / 2);
     }
 
     $scroll.scrollLeft(Math.max(scrollLeft, 0));
@@ -718,8 +822,7 @@
   function createRowFromData(data, row, options, palette, colorIndex) {
     data = data || {};
 
-    var parsedStart = parseDate(data.start);
-    var parsedEnd = parseDate(data.end);
+    var schedule = resolveSchedule(data, options);
     var hasOwnProgress = data.progress !== undefined && data.progress !== null;
 
     row.source = data;
@@ -729,10 +832,143 @@
     row.invalidDateRange = !!(parsedStart && parsedEnd && parsedStart > parsedEnd);
     row.status = data.status;
     row.hasOwnProgress = hasOwnProgress;
+    // 진행바 폭은 100%를 넘길 수 없어 clamp 하되, 초과 표시를 위해 원본을 남긴다.
+    row.rawProgress = hasOwnProgress ? Number(data.progress) : null;
     row.progress = hasOwnProgress ? clamp(data.progress, 0, 100) : row.progress;
     row.color = resolveRowColor(data, row, options, palette, colorIndex);
+    row.dependencies = Array.isArray(data.dependencies) ? data.dependencies : [];
+    row.afterDependencies = Array.isArray(data.afterDependencies) ? data.afterDependencies : [];
 
     return row;
+  }
+
+  // start/end 가 비면 plan 값으로 대체하고, start 만 있으면 expectDays 로 종료일을 만든다.
+  function resolveSchedule(data, options) {
+    var start = parseDate(data.start);
+    var end = parseDate(data.end);
+
+    if (start) {
+      return {
+        start: start,
+        end: end || addExpectDays(start, data, options) || parseDate(data.planEnd),
+        isPlanned: false
+      };
+    }
+
+    return {
+      start: parseDate(data.planStart),
+      end: end || parseDate(data.planEnd),
+      isPlanned: true
+    };
+  }
+
+  // expectDays 는 시작일을 포함한 일수라 하루를 빼고 더한다.
+  function addExpectDays(start, data, options) {
+    var field = (options && options.leadTimeField) || 'expectDays';
+    var days = Number(data[field]);
+
+    if (!start || Number.isNaN(days) || days < 1) {
+      return null;
+    }
+
+    return addDays(start, days - 1);
+  }
+
+  function getDependencyKey(row) {
+    if (row.source && row.source.id !== undefined && row.source.id !== null) {
+      return row.source.id;
+    }
+
+    return row.id;
+  }
+
+  function buildDependencyEdges(visibleRows) {
+    var lookup = {};
+
+    visibleRows.forEach(function (row) {
+      lookup[getDependencyKey(row)] = row;
+    });
+
+    var edges = [];
+
+    function pushEdge(fromRow, toRow, type) {
+      if (!fromRow || fromRow === toRow) {
+        return;
+      }
+
+      if (!fromRow.start || !fromRow.end || !toRow.start || !toRow.end) {
+        return;
+      }
+
+      edges.push({ from: fromRow, to: toRow, type: type });
+    }
+
+    visibleRows.forEach(function (row) {
+      // 선행: 상대의 오른쪽 -> 내 왼쪽
+      (row.dependencies || []).forEach(function (dependencyId) {
+        pushEdge(lookup[dependencyId], row, 'dependency');
+      });
+
+      // 후행: 내 오른쪽 -> 상대의 오른쪽
+      (row.afterDependencies || []).forEach(function (afterId) {
+        pushEdge(row, lookup[afterId], 'after');
+      });
+    });
+
+    return edges;
+  }
+
+  // 역방향(선행이 끝나기 전 후행 시작) 중에서도, 우회 경로가 차트 왼쪽 밖으로
+  // 나가는 건은 맨 앞 날짜에 붙은 것뿐이다. 그 건만 모은다.
+  function collectBackwardDependencies(rows, units, unitWidth) {
+    var lookup = {};
+    var backward = [];
+
+    rows.forEach(function (row) {
+      lookup[getDependencyKey(row)] = row;
+    });
+
+    rows.forEach(function (row) {
+      (row.dependencies || []).forEach(function (dependencyId) {
+        var fromRow = lookup[dependencyId];
+
+        if (!fromRow || fromRow === row || !fromRow.end || !row.start) {
+          return;
+        }
+
+        if (row.start >= fromRow.end) {
+          return;
+        }
+
+        var overflow = getDependencyLeftOverflow(row, units, unitWidth);
+
+        if (overflow <= 0) {
+          return;
+        }
+
+        backward.push({
+          fromId: dependencyId,
+          toId: getDependencyKey(row),
+          fromLabel: fromRow.label,
+          toLabel: row.label,
+          overlapDays: diffDays(row.start, fromRow.end),
+          leftOverflow: overflow
+        });
+      });
+    });
+
+    return backward;
+  }
+
+  // 우회 경로 x = (대상 bar 왼쪽) - detourLead. 이 값이 음수인 만큼이 차트 밖이다.
+  function getDependencyLeftOverflow(toRow, units, unitWidth) {
+    if (!units || !units.length || !toRow.start) {
+      return 0;
+    }
+
+    var toX = taskBarInset + dateToOffset(toRow.start, units, unitWidth);
+
+    return Math.max(dependencyDetourLead - toX, 0);
   }
 
   function resolveRowColor(data, row, options, palette, colorIndex) {
@@ -761,6 +997,32 @@
       progress: row.progress,
       source: data
     });
+  }
+
+  function getLeadTimeValue(row, options) {
+    var field = options.leadTimeField || 'expectDays';
+    var raw = row.source && row.source[field];
+    var value = Number(raw);
+
+    return raw !== undefined && raw !== null && !Number.isNaN(value) ? value : null;
+  }
+
+  function buildLeadTimeBadge(row, options) {
+    var leadTime = getLeadTimeValue(row, options);
+
+    if (leadTime === null || !row.start || !row.end) {
+      return null;
+    }
+
+    var actualDays = diffDays(row.start, row.end) + 1;
+    var diff = actualDays - leadTime;
+    var isOver = diff > 0;
+
+    return $('<span class="cg-lt-badge">')
+      .toggleClass('is-over', isOver)
+      .toggleClass('is-under', !isOver)
+      .attr('title', '리드타임(L/T) ' + leadTime + '일 기준 ' + (isOver ? Math.abs(diff) + '일 초과' : Math.abs(diff) + '일 여유'))
+      .text('L/T ' + (diff > 0 ? '+' : '') + diff);
   }
 
   function getVisibleRows(rows, collapsed) {
@@ -933,7 +1195,10 @@
         starts.push(row.start);
       }
       if (row.end) {
-        ends.push(row.end);
+        // 초과 구간도 달력 위에 그려야 하므로 기간에 포함한다.
+        var overrunDays = getOverrunDays(row);
+
+        ends.push(overrunDays ? addDays(row.end, overrunDays) : row.end);
       }
     });
 
@@ -993,8 +1258,10 @@
     var color = row.color || (row.isSummary ? '#334155' : getColorPalette(options.colorTheme)[0]);
     var label = getBarLabel(row, progress, options);
     var textColor = getReadableTextColor(color);
+    var isOverProgress = row.rawProgress > 100;
     var $bar = $('<div class="cg-task-bar">')
       .toggleClass('is-summary', !!row.isSummary)
+      .toggleClass('is-over-progress', isOverProgress)
       .data('taskRow', row)
       .css({ left: metrics.left, width: metrics.width });
     var $progress = $('<div class="cg-task-progress">').css('width', progress + '%');
@@ -1035,6 +1302,11 @@
         type: row.type,
         status: row.status,
         progress: progress,
+        // 100 으로 잘리기 전 원본과 초과 판정도 함께 넘긴다.
+        rawProgress: row.rawProgress,
+        isOverProgress: row.rawProgress > 100,
+        overLevel: row.rawProgress > 100 ? getOverProgressLevel(row) : null,
+        overrunDays: getOverrunDays(row),
         source: row.source || row
       });
     }
@@ -1049,13 +1321,53 @@
   function renderSummaryLead(row, units, unitWidth, options) {
     var metrics = getTaskBarMetrics(row, units, unitWidth, options);
 
-    if (!metrics || metrics.left <= 12) {
+    if (leadTime === null) {
+      return $();
+    }
+
+    var boundaryDate = addDays(row.start, leadTime - 1);
+    var boundaryMetrics = getTaskBarMetrics({ start: row.start, end: boundaryDate }, units, unitWidth, lead);
+
+    if (!boundaryMetrics) {
+      return $();
+    }
+
+    var actualDays = diffDays(row.start, row.end) + 1;
+    var isOver = actualDays > leadTime;
+
+    return $('<div class="cg-lt-marker">')
+      .toggleClass('is-over', isOver)
+      .toggleClass('is-under', !isOver)
+      .css('left', boundaryMetrics.left + boundaryMetrics.width)
+      .attr('title', 'L/T 기준(' + leadTime + '일): ' + formatDate(boundaryDate, options.locale) + '까지');
+  }
+
+  // 첫 컬럼만 lead 만큼 넓히고 나머지는 unitWidth 그대로 둔다.
+  function buildGridTemplate(unitCount, unitWidth, lead) {
+    if (!lead || unitCount < 1) {
+      return 'repeat(' + unitCount + ', ' + unitWidth + 'px)';
+    }
+
+    var firstColumn = (unitWidth + lead) + 'px';
+
+    if (unitCount === 1) {
+      return firstColumn;
+    }
+
+    return firstColumn + ' repeat(' + (unitCount - 1) + ', ' + unitWidth + 'px)';
+  }
+
+  function renderSummaryLead(row, units, unitWidth, lead) {
+    var metrics = getTaskBarMetrics(row, units, unitWidth, lead);
+    var origin = (lead || 0) + 3;
+
+    if (!metrics || metrics.left - origin <= 9) {
       return $();
     }
 
     return $('<div class="cg-summary-lead">').css({
-      left: 3,
-      width: metrics.left - 6
+      left: origin,
+      width: metrics.left - origin - 3
     });
   }
 
@@ -1075,12 +1387,12 @@
     var endOffset = dateToOffset(addDays(end, 1), units, unitWidth);
 
     return {
-      left: startOffset + 3,
-      width: Math.max(endOffset - startOffset - 6, 8)
+      left: startOffset + taskBarInset,
+      width: Math.max(endOffset - startOffset - (taskBarInset * 2), 8)
     };
   }
 
-  function appendTodayLine($timeline, units, unitWidth) {
+  function appendTodayLine($timeline, units, unitWidth, lead) {
     var today = stripTime(new Date());
     var start = stripTime(units[0].start);
     var end = stripTime(units[units.length - 1].end);
@@ -1090,7 +1402,7 @@
     }
 
     $timeline.append(
-      $('<div class="cg-today-line">').css('left', dateToOffset(today, units, unitWidth))
+      $('<div class="cg-today-line">').css('left', (lead || 0) + dateToOffset(today, units, unitWidth))
     );
   }
 

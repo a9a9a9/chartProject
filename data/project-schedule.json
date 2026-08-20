@@ -7,7 +7,7 @@
       "status": "PROCESSING",
       "start": "2025-12-31",
       "end": "2026-02-27",
-      "expectDays": 54,
+      "expectDays": 50,
       "progress": 92,
       "color": "#2563eb"
     },
@@ -18,7 +18,7 @@
       "status": "PROCESSING",
       "start": "2026-02-02",
       "end": "2026-04-17",
-      "expectDays": 75,
+      "expectDays": 90,
       "progress": 62,
       "color": "#7c3aed"
     },
@@ -66,7 +66,7 @@
       "start": "2026-12-31",
       "end": "2026-01-23",
       "expectDays": 19,
-      "progress": 98,
+      "progress": 115,
       "color": "#2563eb"
     },
     {
@@ -199,9 +199,12 @@
       "status": "FINISHED",
       "start": "2025-12-31",
       "end": "2026-01-09",
-      "expectDays": 5,
+      "expectDays": 3,
       "progress": 100,
-      "color": "#2563eb"
+      "color": "#2563eb",
+      "dependencies": [
+        "L01M02S03"
+      ]
     },
     {
       "mediumId": "L01M01",
@@ -212,8 +215,11 @@
       "start": "2026-01-08",
       "end": "2026-01-16",
       "expectDays": 9,
-      "progress": 100,
-      "color": "#2563eb"
+      "progress": 135,
+      "color": "#2563eb",
+      "dependencies": [
+        "L01M01S01"
+      ]
     },
     {
       "mediumId": "L01M01",
@@ -224,8 +230,11 @@
       "start": "2026-01-12",
       "end": "2026-01-23",
       "expectDays": 12,
-      "progress": 95,
-      "color": "#2563eb"
+      "progress": 108,
+      "color": "#2563eb",
+      "dependencies": [
+        "L01M01S02"
+      ]
     },
     {
       "mediumId": "L01M02",
@@ -235,9 +244,12 @@
       "status": "PROCESSING",
       "start": "2026-01-19",
       "end": "2026-02-06",
-      "expectDays": 19,
+      "expectDays": 25,
       "progress": 90,
-      "color": "#0891b2"
+      "color": "#0891b2",
+      "dependencies": [
+        "L01M01S03"
+      ]
     },
     {
       "mediumId": "L01M02",
@@ -249,7 +261,10 @@
       "end": "2026-02-13",
       "expectDays": 19,
       "progress": 86,
-      "color": "#0891b2"
+      "color": "#0891b2",
+      "dependencies": [
+        "L01M02S01"
+      ]
     },
     {
       "mediumId": "L01M02",
@@ -261,7 +276,10 @@
       "end": "2026-02-27",
       "expectDays": 19,
       "progress": 78,
-      "color": "#0891b2"
+      "color": "#0891b2",
+      "dependencies": [
+        "L01M02S02"
+      ]
     },
     {
       "mediumId": "L02M01",
@@ -273,7 +291,10 @@
       "end": "2026-02-20",
       "expectDays": 19,
       "progress": 82,
-      "color": "#7c3aed"
+      "color": "#7c3aed",
+      "dependencies": [
+        "L01M02S03"
+      ]
     },
     {
       "mediumId": "L02M01",
@@ -283,9 +304,12 @@
       "status": "PROCESSING",
       "start": "2026-02-16",
       "end": "2026-03-06",
-      "expectDays": 19,
+      "expectDays": 12,
       "progress": 70,
-      "color": "#7c3aed"
+      "color": "#7c3aed",
+      "dependencies": [
+        "L02M01S01"
+      ]
     },
     {
       "mediumId": "L02M01",
@@ -297,7 +321,10 @@
       "end": "2026-03-13",
       "expectDays": 19,
       "progress": 62,
-      "color": "#7c3aed"
+      "color": "#7c3aed",
+      "dependencies": [
+        "L02M01S02"
+      ]
     },
     {
       "mediumId": "L02M02",
@@ -309,7 +336,10 @@
       "end": "2026-02-27",
       "expectDays": 19,
       "progress": 88,
-      "color": "#9333ea"
+      "color": "#9333ea",
+      "dependencies": [
+        "L01M02S03"
+      ]
     },
     {
       "mediumId": "L02M02",
@@ -357,7 +387,11 @@
       "end": "2026-03-20",
       "expectDays": 19,
       "progress": 75,
-      "color": "#16a34a"
+      "color": "#16a34a",
+      "dependencies": [
+        "L02M01S03",
+        "L02M02S01"
+      ]
     },
     {
       "mediumId": "L03M01",
@@ -405,7 +439,10 @@
       "end": "2026-03-27",
       "expectDays": 26,
       "progress": 80,
-      "color": "#0f766e"
+      "color": "#0f766e",
+      "dependencies": [
+        "L02M02S01"
+      ]
     },
     {
       "mediumId": "L03M02",
@@ -427,7 +464,7 @@
       "status": "PROCESSING",
       "start": "2026-04-13",
       "end": "2026-05-29",
-      "expectDays": 47,
+      "expectDays": 55,
       "progress": 20,
       "color": "#0f766e"
     },
@@ -489,7 +526,12 @@
       "end": "2026-05-15",
       "expectDays": 26,
       "progress": 30,
-      "color": "#ea580c"
+      "color": "#ea580c",
+      "dependencies": [
+        "L03M01S04",
+        "L03M02S04",
+        "L03M03S03"
+      ]
     },
     {
       "mediumId": "L04M01",
@@ -561,7 +603,10 @@
       "end": "2026-06-19",
       "expectDays": 19,
       "progress": 0,
-      "color": "#dc2626"
+      "color": "#dc2626",
+      "dependencies": [
+        "L04M02S03"
+      ]
     },
     {
       "mediumId": "L05M01",

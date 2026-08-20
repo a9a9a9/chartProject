@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 140" width="240" height="140" role="img" aria-label="L/T">
+  <g fill="none" stroke="currentColor" stroke-width="14" stroke-linecap="round" stroke-linejoin="round">
+    <!-- L -->
+    <path d="M32 30 V110 H78" />
+    <!-- / -->
+    <path d="M98 118 L128 22" />
+    <!-- T -->
+    <path d="M148 30 H208" />
+    <path d="M178 30 V110" />
+  </g>
+</svg>

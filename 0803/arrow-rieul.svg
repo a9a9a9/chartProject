@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="ㄹ 자 형태 화살표">
+  <g fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="butt" stroke-linejoin="miter" stroke-miterlimit="10">
+    <path d="M30 35 H150 V100 H50 V165 H142" />
+  </g>
+  <polygon points="138,140 182,165 138,190" fill="currentColor" />
+</svg>

@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>설비 점검 체크시트</title>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<style>
+  :root{
+    --bg:#E7E9EC;
+    --surface:#FFFFFF;
+    --surface-alt:#F1F3F5;
+    --ink:#1C232B;
+    --ink-muted:#5B6572;
+    --accent:#1F5673;
+    --accent-dark:#163F55;
+    --accent-soft:#DCE8ED;
+    --ok:#2E7D46;
+    --ok-soft:#E4F3E8;
+    --fail:#B23A2E;
+    --fail-soft:#FBE8E6;
+    --border:#D4D8DC;
+    --radius:10px;
+  }
+
+  *{box-sizing:border-box;}
+
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Segoe UI","Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .page{
+    max-width:920px;
+    margin:0 auto;
+    padding:32px 20px 80px;
+  }
+
+  /* ---------- Header ---------- */
+  .sheet-header{
+    background:var(--accent-dark);
+    color:#fff;
+    border-radius:var(--radius);
+    padding:28px 28px 24px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    gap:24px;
+    box-shadow:0 6px 18px rgba(22,63,85,0.25);
+  }
+
+  .sheet-header .eyebrow{
+    font-family:Consolas,"Courier New",monospace;
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:#9FC4D4;
+    margin:0 0 6px;
+  }
+
+  .sheet-header h1{
+    margin:0 0 14px;
+    font-size:24px;
+    font-weight:600;
+    letter-spacing:-.01em;
+  }
+
+  .meta-row{
+    display:flex;
+    gap:18px;
+    flex-wrap:wrap;
+    font-size:13px;
+  }
+
+  .meta-field label{
+    display:block;
+    color:#9FC4D4;
+    font-size:11px;
+    margin-bottom:4px;
+    letter-spacing:.03em;
+  }
+
+  .meta-field input{
+    background:rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.35);
+    border-radius:6px;
+    color:#fff;
+    padding:6px 10px;
+    font-size:13px;
+    width:150px;
+  }
+  .meta-field input::placeholder{color:rgba(255,255,255,0.5);}
+
+  /* ---------- Gauge (signature element) ---------- */
+  .gauge{
+    --pct:0;
+    position:relative;
+    width:92px;
+    height:92px;
+    border-radius:50%;
+    flex-shrink:0;
+    background:
+      radial-gradient(closest-side, var(--accent-dark) 66%, transparent 67% 100%),
+      conic-gradient(#57C6E8 calc(var(--pct)*1%), rgba(255,255,255,0.18) 0);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .gauge span{
+    font-family:Consolas,"Courier New",monospace;
+    font-size:18px;
+    font-weight:700;
+  }
+  .gauge small{
+    display:block;
+    font-size:9px;
+    color:#9FC4D4;
+    text-align:center;
+    margin-top:2px;
+    letter-spacing:.06em;
+  }
+
+  /* ---------- Item list ---------- */
+  .checklist{
+    margin-top:22px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+
+  .item{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:16px 18px;
+    display:grid;
+    grid-template-columns:40px 1fr;
+    gap:14px;
+    transition:box-shadow .15s ease, border-color .15s ease;
+  }
+  .item.is-answered{border-color:var(--accent);}
+  .item.is-fail{border-color:var(--fail); background:var(--fail-soft);}
+
+  .item-num{
+    width:32px;
+    height:32px;
+    border-radius:50%;
+    background:var(--surface-alt);
+    border:1px solid var(--border);
+    color:var(--ink-muted);
+    font-family:Consolas,"Courier New",monospace;
+    font-weight:700;
+    font-size:13px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .item.is-answered .item-num{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+  }
+  .item.is-fail .item-num{
+    background:var(--fail);
+    border-color:var(--fail);
+    color:#fff;
+  }
+
+  .item-body{min-width:0;}
+
+  .item-question{
+    font-size:14.5px;
+    line-height:1.5;
+    margin:0 0 10px;
+    display:flex;
+    align-items:flex-start;
+    gap:6px;
+  }
+  .item-question .req{
+    color:var(--fail);
+    font-size:12px;
+    margin-top:2px;
+  }
+  .item-type-tag{
+    display:inline-block;
+    font-family:Consolas,"Courier New",monospace;
+    font-size:10px;
+    letter-spacing:.04em;
+    color:var(--ink-muted);
+    background:var(--surface-alt);
+    border:1px solid var(--border);
+    border-radius:4px;
+    padding:1px 6px;
+    margin-left:8px;
+    vertical-align:middle;
+  }
+
+  /* type: text */
+  .ctrl-text input[type=text]{
+    width:100%;
+    padding:9px 11px;
+    border:1px solid var(--border);
+    border-radius:7px;
+    font-size:13.5px;
+    background:var(--surface-alt);
+  }
+  .ctrl-text input[type=text]:focus{
+    outline:2px solid var(--accent);
+    outline-offset:1px;
+    background:#fff;
+  }
+
+  /* type: file */
+  .ctrl-file{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .file-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    padding:8px 14px;
+    background:var(--accent-soft);
+    color:var(--accent-dark);
+    border:1px solid var(--accent);
+    border-radius:7px;
+    font-size:13px;
+    cursor:pointer;
+    font-weight:600;
+  }
+  .file-btn:hover{background:var(--accent); color:#fff;}
+  .file-name{font-size:12.5px; color:var(--ink-muted);}
+  .ctrl-file input[type=file]{display:none;}
+
+  /* type: radio (Y/N/NULL) */
+  .ctrl-radio{display:flex; gap:8px;}
+  .radio-opt{
+    position:relative;
+  }
+  .radio-opt input{
+    position:absolute;
+    opacity:0;
+    inset:0;
+    cursor:pointer;
+  }
+  .radio-opt label{
+    display:block;
+    padding:7px 16px;
+    border:1px solid var(--border);
+    border-radius:20px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--ink-muted);
+    cursor:pointer;
+    user-select:none;
+  }
+  .radio-opt input:checked + label{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:#fff;
+  }
+  .radio-opt[data-val="N"] input:checked + label{
+    background:var(--fail);
+    border-color:var(--fail);
+  }
+  .radio-opt[data-val="NULL"] input:checked + label{
+    background:var(--ink-muted);
+    border-color:var(--ink-muted);
+  }
+
+  /* type: checkbox */
+  .ctrl-checkbox{display:flex; align-items:center; gap:9px;}
+  .ctrl-checkbox input{width:18px; height:18px; accent-color:var(--accent); cursor:pointer;}
+  .ctrl-checkbox label{font-size:13px; color:var(--ink-muted); cursor:pointer;}
+
+  /* type: number (부등식) */
+  .ctrl-number{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .ctrl-number input[type=number]{
+    width:110px;
+    padding:9px 11px;
+    border:1px solid var(--border);
+    border-radius:7px;
+    font-size:13.5px;
+    font-family:Consolas,"Courier New",monospace;
+    background:var(--surface-alt);
+  }
+  .ctrl-number input[type=number]:focus{outline:2px solid var(--accent); background:#fff;}
+  .condition-label{
+    font-family:Consolas,"Courier New",monospace;
+    font-size:12px;
+    color:var(--ink-muted);
+    background:var(--surface-alt);
+    border:1px solid var(--border);
+    padding:4px 8px;
+    border-radius:6px;
+  }
+  .verdict{
+    font-size:12px;
+    font-weight:700;
+    padding:4px 10px;
+    border-radius:20px;
+  }
+  .verdict.pending{background:var(--surface-alt); color:var(--ink-muted);}
+  .verdict.pass{background:var(--ok-soft); color:var(--ok);}
+  .verdict.fail{background:var(--fail-soft); color:var(--fail);}
+
+  /* ---------- Footer ---------- */
+  .sheet-footer{
+    margin-top:26px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .summary-text{font-size:13px; color:var(--ink-muted);}
+  .summary-text b{color:var(--ink);}
+  .submit-btn{
+    background:var(--accent);
+    color:#fff;
+    border:none;
+    padding:12px 26px;
+    border-radius:8px;
+    font-size:14.5px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .submit-btn:hover{background:var(--accent-dark);}
+
+  @media (max-width:600px){
+    .sheet-header{flex-direction:column;}
+    .item{grid-template-columns:32px 1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="sheet-header">
+    <div>
+      <p class="eyebrow">Inspection Checksheet · No. 2026-0709</p>
+      <h1>설비 점검 체크시트</h1>
+      <div class="meta-row">
+        <div class="meta-field">
+          <label>점검일자</label>
+          <input type="date" id="inspectDate">
+        </div>
+        <div class="meta-field">
+          <label>점검자</label>
+          <input type="text" id="inspectorName" placeholder="이름 입력">
+        </div>
+      </div>
+    </div>
+    <div class="gauge" id="gauge">
+      <span id="gaugeText">0%</span>
+    </div>
+  </div>
+
+  <div class="checklist" id="checklist"><!-- 항목은 JS가 동적으로 렌더링 --></div>
+
+  <div class="sheet-footer">
+    <div class="summary-text" id="summaryText">응답 0 / 0 · 부적합 0건</div>
+    <button class="submit-btn" id="submitBtn">점검 결과 제출</button>
+  </div>
+
+</div>
+
+<script>
+/* ==========================================================================
+   1) DB 조회 결과라고 가정한 객체 배열
+   실제 환경에서는 아래처럼 서버에서 JSON을 받아온다고 가정합니다.
+   예) $.getJSON('/api/checklist/2026-0709', function(data){ renderChecklist(data); });
+   답변유형(type) 5종:
+     text     : 텍스트 입력형 (INPUT)
+     file     : 첨부파일 업로드형
+     radio    : Y / N / NULL 중 택1 (라디오)
+     checkbox : 단일 체크박스 (수행여부)
+     number   : 수치 + 부등식 판정 (config.operator, config.threshold, config.unit)
+   ========================================================================== */
+const checklistData = [
+  { id: 1,  type: "radio",    required: true,  question: "서버 정기 백업이 정상적으로 완료되었는가?" },
+  { id: 2,  type: "text",     required: false, question: "최근 점검 시 발견된 이슈가 있다면 내용을 기술하시오" },
+  { id: 3,  type: "file",     required: true,  question: "점검 완료 후 결과 보고서를 첨부하시오" },
+  { id: 4,  type: "checkbox", required: true,  question: "방화벽 로그 점검을 실시하였는가?" },
+  { id: 5,  type: "number",   required: true,  question: "CPU 사용률이 기준치 이하인가?",
+      config: { operator: "<=", threshold: 80, unit: "%" } },
+  { id: 6,  type: "file",     required: true,  question: "담당자 서명 및 확인 도장을 첨부하시오" },
+  { id: 7,  type: "radio",    required: true,  question: "비상 연락망이 최신 상태로 유지되고 있는가?" },
+  { id: 8,  type: "number",   required: true,  question: "디스크 여유 공간이 기준치 이상인가?",
+      config: { operator: ">=", threshold: 20, unit: "GB" } },
+  { id: 9,  type: "text",     required: false, question: "특이사항이나 건의사항을 자유롭게 작성하시오" },
+  { id: 10, type: "checkbox", required: true,  question: "정기 보안 패치를 적용하였는가?" },
+  { id: 11, type: "number",   required: true,  question: "온도 센서 값이 기준치 이하인가?",
+      config: { operator: "<=", threshold: 40, unit: "°C" } },
+  { id: 12, type: "radio",    required: true,  question: "외부 반입 장비에 대한 보안 검사를 완료하였는가?" },
+  { id: 13, type: "file",     required: false, question: "점검 사진(설비 전경)을 첨부하시오" },
+  { id: 14, type: "checkbox", required: true,  question: "케이블 정리 상태를 확인하였는가?" },
+  { id: 15, type: "text",     required: false, question: "금일 발생한 장애 건수와 원인을 기재하시오" }
+];
+
+/* ==========================================================================
+   2) 답변 상태 저장소 (item.id -> { answered:boolean, verdict:'pass'|'fail'|null })
+   ========================================================================== */
+const answerState = {};
+
+const TYPE_LABEL = {
+  text: "TEXT", file: "FILE", radio: "Y/N", checkbox: "CHECK", number: "COND"
+};
+
+/* ==========================================================================
+   3) 타입별 컨트롤 HTML 생성 함수
+   ========================================================================== */
+function buildControl(item){
+  switch(item.type){
+
+    case "text":
+      return `
+        <div class="ctrl-text">
+          <input type="text" data-id="${item.id}" data-role="text-input" placeholder="내용 입력">
+        </div>`;
+
+    case "file":
+      return `
+        <div class="ctrl-file">
+          <label class="file-btn">
+            📎 파일 선택
+            <input type="file" data-id="${item.id}" data-role="file-input">
+          </label>
+          <span class="file-name" data-role="file-name" data-id="${item.id}">선택된 파일 없음</span>
+        </div>`;
+
+    case "radio": {
+      const opts = [
+        { val: "Y", text: "예" },
+        { val: "N", text: "아니오" },
+        { val: "NULL", text: "해당없음" }
+      ];
+      const optsHtml = opts.map(o => `
+        <div class="radio-opt" data-val="${o.val}">
+          <input type="radio" name="radio-${item.id}" id="radio-${item.id}-${o.val}"
+                 data-id="${item.id}" data-role="radio-input" value="${o.val}">
+          <label for="radio-${item.id}-${o.val}">${o.text}</label>
+        </div>`).join("");
+      return `<div class="ctrl-radio">${optsHtml}</div>`;
+    }
+
+    case "checkbox":
+      return `
+        <div class="ctrl-checkbox">
+          <input type="checkbox" id="chk-${item.id}" data-id="${item.id}" data-role="checkbox-input">
+          <label for="chk-${item.id}">수행 완료</label>
+        </div>`;
+
+    case "number": {
+      const cfg = item.config || {};
+      const opSymbol = { "<=": "이하", ">=": "이상", "<": "미만", ">": "초과", "==": "일치" };
+      return `
+        <div class="ctrl-number">
+          <input type="number" data-id="${item.id}" data-role="number-input" placeholder="측정값">
+          <span class="condition-label">기준: ${cfg.threshold}${cfg.unit || ""} ${opSymbol[cfg.operator] || cfg.operator}</span>
+          <span class="verdict pending" data-role="verdict" data-id="${item.id}">미입력</span>
+        </div>`;
+    }
+
+    default:
+      return `<div class="ctrl-unknown">지원하지 않는 답변유형입니다: ${item.type}</div>`;
+  }
+}
+
+/* ==========================================================================
+   4) 전체 항목 렌더링
+   ========================================================================== */
+function renderChecklist(data){
+  const $list = $("#checklist").empty();
+
+  data.forEach(function(item, idx){
+    answerState[item.id] = { answered: false, verdict: null, required: !!item.required };
+
+    const $item = $(`
+      <div class="item" data-id="${item.id}" data-required="${!!item.required}">
+        <div class="item-num">${String(idx + 1).padStart(2, "0")}</div>
+        <div class="item-body">
+          <p class="item-question">
+            ${escapeHtml(item.question)}
+            ${item.required ? '<span class="req">*</span>' : ''}
+            <span class="item-type-tag">${TYPE_LABEL[item.type] || item.type}</span>
+          </p>
+          <div class="item-control">${buildControl(item)}</div>
+        </div>
+      </div>
+    `);
+
+    $list.append($item);
+  });
+
+  updateSummary();
+}
+
+function escapeHtml(str){
+  return $("<div>").text(str).html();
+}
+
+/* ==========================================================================
+   5) 부등식 판정 로직
+   ========================================================================== */
+function evaluateCondition(value, operator, threshold){
+  const v = parseFloat(value);
+  const t = parseFloat(threshold);
+  if (isNaN(v)) return null;
+  switch(operator){
+    case "<=": return v <= t;
+    case ">=": return v >= t;
+    case "<":  return v < t;
+    case ">":  return v > t;
+    case "==": return v === t;
+    default:   return null;
+  }
+}
+
+/* ==========================================================================
+   6) 상태 갱신 & 진행률/요약 표시
+   ========================================================================== */
+function setItemState(id, answered, verdict){
+  answerState[id].answered = answered;
+  answerState[id].verdict = verdict || null;
+
+  const $item = $(`.item[data-id="${id}"]`);
+  $item.toggleClass("is-answered", answered);
+  $item.toggleClass("is-fail", verdict === "fail");
+
+  updateSummary();
+}
+
+function updateSummary(){
+  const ids = Object.keys(answerState);
+  const total = ids.length;
+  const answered = ids.filter(id => answerState[id].answered).length;
+  const failCount = ids.filter(id => answerState[id].verdict === "fail").length;
+  const pct = total ? Math.round((answered / total) * 100) : 0;
+
+  $("#gauge").css("--pct", pct);
+  $("#gaugeText").text(pct + "%");
+  $("#summaryText").html(`응답 <b>${answered} / ${total}</b> · 부적합 <b>${failCount}</b>건`);
+}
+
+/* ==========================================================================
+   7) 이벤트 바인딩 (동적으로 생성된 요소이므로 위임 방식 사용)
+   ========================================================================== */
+$(document).on("input", '[data-role="text-input"]', function(){
+  const id = $(this).data("id");
+  setItemState(id, $(this).val().trim().length > 0);
+});
+
+$(document).on("change", '[data-role="file-input"]', function(){
+  const id = $(this).data("id");
+  const file = this.files[0];
+  $(`[data-role="file-name"][data-id="${id}"]`).text(file ? file.name : "선택된 파일 없음");
+  setItemState(id, !!file);
+});
+
+$(document).on("change", '[data-role="radio-input"]', function(){
+  const id = $(this).data("id");
+  setItemState(id, true);
+});
+
+$(document).on("change", '[data-role="checkbox-input"]', function(){
+  const id = $(this).data("id");
+  setItemState(id, $(this).is(":checked"));
+});
+
+$(document).on("input", '[data-role="number-input"]', function(){
+  const id = $(this).data("id");
+  const item = checklistData.find(d => d.id === id);
+  const cfg = item.config || {};
+  const raw = $(this).val();
+
+  const $verdict = $(`[data-role="verdict"][data-id="${id}"]`);
+
+  if (raw === ""){
+    $verdict.text("미입력").attr("class", "verdict pending");
+    setItemState(id, false, null);
+    return;
+  }
+
+  const result = evaluateCondition(raw, cfg.operator, cfg.threshold);
+  if (result === null){
+    $verdict.text("미입력").attr("class", "verdict pending");
+    setItemState(id, false, null);
+  } else if (result){
+    $verdict.text("적합").attr("class", "verdict pass");
+    setItemState(id, true, "pass");
+  } else {
+    $verdict.text("부적합").attr("class", "verdict fail");
+    setItemState(id, true, "fail");
+  }
+});
+
+/* ==========================================================================
+   8) 제출
+   ========================================================================== */
+$("#submitBtn").on("click", function(){
+  const missing = Object.keys(answerState).filter(id =>
+    answerState[id].required && !answerState[id].answered
+  );
+
+  if (missing.length > 0){
+    alert(`필수 항목 ${missing.length}건이 입력되지 않았습니다.\n(문항 번호: ${missing.join(", ")})`);
+    return;
+  }
+
+  const failItems = Object.keys(answerState).filter(id => answerState[id].verdict === "fail");
+  const msg = failItems.length > 0
+    ? `점검이 완료되었습니다. 단, 부적합 판정 항목이 ${failItems.length}건 있습니다.\n(문항 번호: ${failItems.join(", ")})`
+    : "점검이 완료되었습니다. 모든 항목이 적합합니다.";
+
+  alert(msg);
+  // 실제 환경에서는 여기서 $.ajax(...)로 서버에 결과를 전송
+});
+
+/* ==========================================================================
+   9) 초기 렌더링
+   ========================================================================== */
+$(function(){
+  renderChecklist(checklistData);
+});
+</script>
+
+</body>
+</html>
